@@ -24,6 +24,7 @@ using FirebirdSql.Data.Common;
 
 namespace FirebirdSql.Data.Client.Managed.Version10
 {
+#warning Async
 	internal interface IDatabaseStream
 	{
 		#region · Read Methods ·

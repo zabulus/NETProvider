@@ -26,6 +26,7 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 using FirebirdSql.Data.Common;
 
@@ -220,6 +221,30 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 				AfterAttachActions();
 			}
 		}
+		public virtual async Task AttachAsync(DatabaseParameterBuffer dpb, string dataSource, int port, string database, CancellationToken cancellationToken)
+		{
+			lock (this.SyncObject)
+			{
+				try
+				{
+					await SendAttachToBufferAsync(dpb, database, cancellationToken).ConfigureAwait(false);
+					await this.FlushAsync(cancellationToken).ConfigureAwait(false);
+					ProcessAttachResponse(await this.ReadGenericResponseAsync(cancellationToken).ConfigureAwait(false));
+				}
+				catch (IscException)
+				{
+					SafelyDetach();
+					throw;
+				}
+				catch (IOException)
+				{
+					SafelyDetach();
+					throw new IscException(IscCodes.isc_net_write_err);
+				}
+
+				AfterAttachActions();
+			}
+		}
 
 		protected virtual void SendAttachToBuffer(DatabaseParameterBuffer dpb, string database)
 		{
@@ -228,6 +253,14 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 			this.Write(0);				    	// Database	object ID
 			this.WriteBuffer(Encoding.Default.GetBytes(database));				// Database	PATH
 			this.WriteBuffer(dpb.ToArray());	// DPB Parameter buffer
+		}
+		protected virtual async Task SendAttachToBufferAsync(DatabaseParameterBuffer dpb, string database, CancellationToken cancellationToken)
+		{
+			// Attach to the database
+			await this.WriteAsync(IscCodes.op_attach, cancellationToken).ConfigureAwait(false);
+			await this.WriteAsync(0, cancellationToken).ConfigureAwait(false);				    	// Database	object ID
+			await this.WriteBufferAsync(Encoding.Default.GetBytes(database), cancellationToken).ConfigureAwait(false);				// Database	PATH
+			await this.WriteBufferAsync(dpb.ToArray(), cancellationToken).ConfigureAwait(false);	// DPB Parameter buffer
 		}
 
 		protected virtual void ProcessAttachResponse(GenericResponse response)
@@ -245,6 +278,12 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 		public virtual void AttachWithTrustedAuth(DatabaseParameterBuffer dpb, string dataSource, int port, string database)
 		{
 			throw new NotSupportedException("Trusted Auth isn't supported on < FB2.1.");
+		}
+		public virtual Task AttachWithTrustedAuthAsync(DatabaseParameterBuffer dpb, string dataSource, int port, string database, CancellationToken cancellationToken)
+		{
+			// no async implementation
+			AttachWithTrustedAuth(dpb, dataSource, port, database);
+			return Task.FromResult<object>(null);
 		}
 
 		public virtual void Detach()
@@ -666,6 +705,10 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 		{
 			return this.inputStream.ReadOperation();
 		}
+		public virtual Task<int> ReadOperationAsync(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadOperationAsync(cancellationToken);
+		}
 
 		public virtual int NextOperation()
 		{
@@ -683,10 +726,25 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 			return response;
 		}
+		public virtual async Task<IResponse> ReadResponseAsync(CancellationToken cancellationToken)
+		{
+			IResponse response = await this.ReadSingleResponseAsync(cancellationToken).ConfigureAwait(false);
+
+			if (response is GenericResponse)
+			{
+				this.ProcessResponse(response);
+			}
+
+			return response;
+		}
 
 		public virtual GenericResponse ReadGenericResponse()
 		{
 			return (GenericResponse)this.ReadResponse();
+		}
+		public virtual async Task<GenericResponse> ReadGenericResponseAsync(CancellationToken cancellationToken)
+		{
+			return (GenericResponse)await this.ReadResponseAsync(cancellationToken).ConfigureAwait(false);
 		}
 
 		public virtual SqlResponse ReadSqlResponse()
@@ -754,6 +812,66 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 			return exception;
 		}
+		public virtual async Task<IscException> ReadStatusVectorAsync(CancellationToken cancellationToken)
+		{
+			IscException exception = null;
+			bool eof = false;
+
+			while (!eof)
+			{
+				int arg = await this.ReadInt32Async(cancellationToken).ConfigureAwait(false);
+
+				switch (arg)
+				{
+					case IscCodes.isc_arg_gds:
+						int er = await this.ReadInt32Async(cancellationToken).ConfigureAwait(false);
+						if (er != 0)
+						{
+							if (exception == null)
+							{
+								exception = new IscException();
+							}
+							exception.Errors.Add(new IscError(arg, er));
+						}
+						break;
+
+					case IscCodes.isc_arg_end:
+						if (exception != null && exception.Errors.Count != 0)
+						{
+							exception.BuildExceptionData();
+						}
+						eof = true;
+						break;
+
+					case IscCodes.isc_arg_interpreted:
+					case IscCodes.isc_arg_string:
+						exception.Errors.Add(new IscError(arg, await this.ReadStringAsync(cancellationToken).ConfigureAwait(false)));
+						break;
+
+					case IscCodes.isc_arg_number:
+						exception.Errors.Add(new IscError(arg, await this.ReadInt32Async(cancellationToken).ConfigureAwait(false)));
+						break;
+
+					case IscCodes.isc_arg_sql_state:
+						exception.Errors.Add(new IscError(arg, await this.ReadStringAsync(cancellationToken).ConfigureAwait(false)));
+						break;
+
+					default:
+						int e = await this.ReadInt32Async(cancellationToken).ConfigureAwait(false);
+						if (e != 0)
+						{
+							if (exception == null)
+							{
+								exception = new IscException();
+							}
+							exception.Errors.Add(new IscError(arg, e));
+						}
+						break;
+				}
+			}
+
+			return exception;
+		}
 
 		public virtual void SetOperation(int operation)
 		{
@@ -791,6 +909,16 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 			return response;
 		}
+		protected virtual async Task<IResponse> ReadSingleResponseAsync(CancellationToken cancellationToken)
+		{
+			int operation = await this.ReadOperationAsync(cancellationToken).ConfigureAwait(false);
+
+			IResponse response = await ProcessOperationAsync(operation, cancellationToken).ConfigureAwait(false);
+
+			ProcessResponseWarnings(response);
+
+			return response;
+		}
 
 		protected virtual IResponse ProcessOperation(int operation)
 		{
@@ -808,6 +936,27 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 				case IscCodes.op_sql_response:
 					return new SqlResponse(this.ReadInt32());
+
+				default:
+					return null;
+			}
+		}
+		protected virtual async Task<IResponse> ProcessOperationAsync(int operation, CancellationToken cancellationToken)
+		{
+			switch (operation)
+			{
+				case IscCodes.op_response:
+					return new GenericResponse(
+						await this.ReadInt32Async(cancellationToken),
+						await this.ReadInt64Async(cancellationToken),
+						await this.ReadBufferAsync(cancellationToken),
+						await this.ReadStatusVectorAsync(cancellationToken));
+
+				case IscCodes.op_fetch_response:
+					return new FetchResponse(await this.ReadInt32Async(cancellationToken), await this.ReadInt32Async(cancellationToken));
+
+				case IscCodes.op_sql_response:
+					return new SqlResponse(await this.ReadInt32Async(cancellationToken));
 
 				default:
 					return null;
@@ -867,90 +1016,162 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 		{
 			return this.inputStream.ReadBytes(count);
 		}
+		public Task<byte[]> ReadBytesAsync(int count, CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadBytesAsync(count, cancellationToken);
+		}
 
 		public byte[] ReadOpaque(int length)
 		{
 			return this.inputStream.ReadOpaque(length);
+		}
+		public Task<byte[]> ReadOpaqueAsync(int length, CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadOpaqueAsync(length, cancellationToken);
 		}
 
 		public byte[] ReadBuffer()
 		{
 			return this.inputStream.ReadBuffer();
 		}
+		public Task<byte[]> ReadBufferAsync(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadBufferAsync(cancellationToken);
+		}
 
 		public string ReadString()
 		{
 			return this.inputStream.ReadString();
+		}
+		public Task<string> ReadStringAsync(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadStringAsync(cancellationToken);
 		}
 
 		public string ReadString(int length)
 		{
 			return this.inputStream.ReadString(length);
 		}
+		public Task<string> ReadStringAsync(int length, CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadStringAsync(length, cancellationToken);
+		}
 
 		public string ReadString(Charset charset)
 		{
 			return this.inputStream.ReadString(charset);
+		}
+		public Task<string> ReadStringAsync(Charset charset, CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadStringAsync(charset, cancellationToken);
 		}
 
 		public string ReadString(Charset charset, int length)
 		{
 			return this.inputStream.ReadString(charset, length);
 		}
+		public Task<string> ReadStringAsync(Charset charset, int length, CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadStringAsync(charset, length, cancellationToken);
+		}
 
 		public short ReadInt16()
 		{
 			return this.inputStream.ReadInt16();
+		}
+		public Task<short> ReadInt16Async(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadInt16Async(cancellationToken);
 		}
 
 		public int ReadInt32()
 		{
 			return this.inputStream.ReadInt32();
 		}
+		public Task<int> ReadInt32Async(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadInt32Async(cancellationToken);
+		}
 
 		public long ReadInt64()
 		{
 			return this.inputStream.ReadInt64();
+		}
+		public Task<long> ReadInt64Async(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadInt64Async(cancellationToken);
 		}
 
 		public Guid ReadGuid(int length)
 		{
 			return this.inputStream.ReadGuid(length);
 		}
+		public Task<Guid> ReadGuidAsync(int length, CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadGuidAsync(length, cancellationToken);
+		}
 
 		public float ReadSingle()
 		{
 			return this.inputStream.ReadSingle();
+		}
+		public Task<float> ReadSingleAsync(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadSingleAsync(cancellationToken);
 		}
 
 		public double ReadDouble()
 		{
 			return this.inputStream.ReadDouble();
 		}
+		public Task<double> ReadDoubleAsync(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadDoubleAsync(cancellationToken);
+		}
 
 		public DateTime ReadDateTime()
 		{
 			return this.inputStream.ReadDateTime();
+		}
+		public Task<DateTime> ReadDateTimeAsync(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadDateTimeAsync(cancellationToken);
 		}
 
 		public DateTime ReadDate()
 		{
 			return this.inputStream.ReadDate();
 		}
+		public Task<DateTime> ReadDateAsync(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadDateAsync(cancellationToken);
+		}
 
 		public TimeSpan ReadTime()
 		{
 			return this.inputStream.ReadTime();
+		}
+		public Task<TimeSpan> ReadTimeAsync(CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadTimeAsync(cancellationToken);
 		}
 
 		public decimal ReadDecimal(int type, int scale)
 		{
 			return this.inputStream.ReadDecimal(type, scale);
 		}
+		public Task<decimal> ReadDecimalAsync(int type, int scale, CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadDecimalAsync(type, scale, cancellationToken);
+		}
 
 		public object ReadValue(DbField field)
 		{
 			return this.inputStream.ReadValue(field);
+		}
+		public Task<object> ReadValueAsync(DbField field, CancellationToken cancellationToken)
+		{
+			return this.inputStream.ReadValueAsync(field, cancellationToken);
 		}
 
 		#endregion
@@ -961,105 +1182,189 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 		{
 			this.outputStream.WriteOpaque(buffer);
 		}
+		public Task WriteOpaqueAsync(byte[] buffer, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteOpaqueAsync(buffer, cancellationToken);
+		}
 
 		public void WriteOpaque(byte[] buffer, int length)
 		{
 			this.outputStream.WriteOpaque(buffer, length);
+		}
+		public Task WriteOpaqueAsync(byte[] buffer, int length, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteOpaqueAsync(buffer, length, cancellationToken);
 		}
 
 		public void WriteBuffer(byte[] buffer)
 		{
 			this.outputStream.WriteBuffer(buffer);
 		}
+		public Task WriteBufferAsync(byte[] buffer, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteBufferAsync(buffer, cancellationToken);
+		}
 
 		public void WriteBuffer(byte[] buffer, int length)
 		{
 			this.outputStream.WriteBuffer(buffer, length);
+		}
+		public Task WriteBufferAsync(byte[] buffer, int length, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteBufferAsync(buffer, length, cancellationToken);
 		}
 
 		public void WriteBlobBuffer(byte[] buffer)
 		{
 			this.outputStream.WriteBlobBuffer(buffer);
 		}
+		public Task WriteBlobBufferAsync(byte[] buffer, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteBlobBufferAsync(buffer, cancellationToken);
+		}
 
 		public void WriteTyped(int type, byte[] buffer)
 		{
 			this.outputStream.WriteTyped(type, buffer);
+		}
+		public Task WriteTypedAsync(int type, byte[] buffer, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteTypedAsync(type, buffer, cancellationToken);
 		}
 
 		public void Write(string value)
 		{
 			this.outputStream.Write(value);
 		}
+		public Task WriteAsync(string value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
+		}
 
 		public void Write(short value)
 		{
 			this.outputStream.Write(value);
+		}
+		public Task WriteAsync(short value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
 		}
 
 		public void Write(int value)
 		{
 			this.outputStream.Write(value);
 		}
+		public Task WriteAsync(int value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
+		}
 
 		public void Write(long value)
 		{
 			this.outputStream.Write(value);
+		}
+		public Task WriteAsync(long value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
 		}
 
 		public void Write(float value)
 		{
 			this.outputStream.Write(value);
 		}
+		public Task WriteAsync(float value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
+		}
 
 		public void Write(double value)
 		{
 			this.outputStream.Write(value);
+		}
+		public Task WriteAsync(double value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
 		}
 
 		public void Write(decimal value, int type, int scale)
 		{
 			this.outputStream.Write(value, type, scale);
 		}
+		public Task WriteAsync(decimal value, int type, int scale, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, type, scale, cancellationToken);
+		}
 
 		public void Write(bool value)
 		{
 			this.outputStream.Write(value);
+		}
+		public Task WriteAsync(bool value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
 		}
 
 		public void Write(DateTime value)
 		{
 			this.outputStream.Write(value);
 		}
+		public Task WriteAsync(DateTime value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
+		}
 
 		public void WriteDate(DateTime value)
 		{
 			this.outputStream.Write(value);
+		}
+		public Task WriteDateAsync(DateTime value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
 		}
 
 		public void WriteTime(DateTime value)
 		{
 			this.outputStream.Write(value);
 		}
+		public Task WriteTimeAsync(DateTime value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
+		}
 
 		public void Write(Descriptor value)
 		{
 			this.outputStream.Write(value);
+		}
+		public Task WriteAsync(Descriptor value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
 		}
 
 		public void Write(DbField value)
 		{
 			this.outputStream.Write(value);
 		}
+		public Task WriteAsync(DbField value, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(value, cancellationToken);
+		}
 
 		public void Write(byte[] buffer, int offset, int count)
 		{
 			this.outputStream.Write(buffer, offset, count);
 		}
+		public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+		{
+			return this.outputStream.WriteAsync(buffer, offset, count, cancellationToken);
+		}
 
 		public void Flush()
 		{
 			this.outputStream.Flush();
+		}
+		public Task FlushAsync(CancellationToken cancellationToken)
+		{
+			return this.outputStream.FlushAsync(cancellationToken);
 		}
 
 		#endregion
