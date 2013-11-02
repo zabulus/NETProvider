@@ -20,6 +20,7 @@
  */
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 using FirebirdSql.Data.Common;
@@ -53,13 +54,13 @@ namespace FirebirdSql.Data.FirebirdClient
 			}
 		}
 
-		public static async Task<IDatabase> CreateDatabaseAsync(FbConnectionString options)
+		public static async Task<IDatabase> CreateDatabaseAsync(FbConnectionString options, CancellationToken cancellationToken)
 		{
 			switch (options.ServerType)
 			{
 				case FbServerType.Default:
 					// Managed Client
-					return await CreateManagedDatabaseAsync(options).ConfigureAwait(false);
+					return await CreateManagedDatabaseAsync(options, cancellationToken).ConfigureAwait(false);
 
 #if (!NET_CF)
 				case FbServerType.Embedded:
@@ -94,12 +95,12 @@ namespace FirebirdSql.Data.FirebirdClient
 			}
 		}
 
-		private static async Task<IDatabase> CreateManagedDatabaseAsync(FbConnectionString options)
+		private static async Task<IDatabase> CreateManagedDatabaseAsync(FbConnectionString options, CancellationToken cancellationToken)
 		{
 			FirebirdSql.Data.Client.Managed.Version10.GdsConnection connection = new FirebirdSql.Data.Client.Managed.Version10.GdsConnection(options.DataSource, options.Port, options.PacketSize, Charset.GetCharset(options.Charset));
 
-			await connection.ConnectAsync().ConfigureAwait(false);
-			await connection.IdentifyAsync(options.Database).ConfigureAwait(false);
+			await connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
+			await connection.IdentifyAsync(options.Database, cancellationToken).ConfigureAwait(false);
 
 			switch (connection.ProtocolVersion)
 			{

@@ -215,7 +215,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 			try
 			{
-				this.db = await ClientFactory.CreateDatabaseAsync(this.options).ConfigureAwait(false);
+				this.db = await ClientFactory.CreateDatabaseAsync(this.options, cancellationToken).ConfigureAwait(false);
 				this.db.Charset = Charset.GetCharset(this.options.Charset);
 				this.db.Dialect = this.options.Dialect;
 				this.db.PacketSize = this.options.PacketSize;
@@ -224,11 +224,11 @@ namespace FirebirdSql.Data.FirebirdClient
 
 				if (options.FallIntoTrustedAuth)
 				{
-					await this.db.AttachWithTrustedAuthAsync(dpb, this.options.DataSource, this.options.Port, this.options.Database).ConfigureAwait(false);
+					await this.db.AttachWithTrustedAuthAsync(dpb, this.options.DataSource, this.options.Port, this.options.Database, cancellationToken).ConfigureAwait(false);
 				}
 				else
 				{
-					await this.db.AttachAsync(dpb, this.options.DataSource, this.options.Port, this.options.Database).ConfigureAwait(false);
+					await this.db.AttachAsync(dpb, this.options.DataSource, this.options.Port, this.options.Database, cancellationToken).ConfigureAwait(false);
 				}
 			}
 			catch (IscException ex)
