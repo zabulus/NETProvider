@@ -20,8 +20,11 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FirebirdSql.Data.Common
 {
@@ -97,6 +100,11 @@ namespace FirebirdSql.Data.Common
 				return false;
 			}
 			return true;
+		}
+
+		public static Task ConnectAsync(this Socket socket, IPEndPoint remoteEP)
+		{
+			return Task.Factory.FromAsync<IPEndPoint>(socket.BeginConnect, socket.EndConnect, remoteEP, null);
 		}
 	}
 }
