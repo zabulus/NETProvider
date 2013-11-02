@@ -27,6 +27,8 @@ using System.Data.Common;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 
 using FirebirdSql.Data.Common;
 
@@ -551,6 +553,87 @@ namespace FirebirdSql.Data.FirebirdClient
 						{
 							// Send connection return back to the Pool
 							FbConnectionPoolManager.Instance.Release(this.innerConnection);
+						}
+						else
+						{
+							this.innerConnection.Dispose();
+							this.innerConnection = null;
+						}
+
+						throw;
+					}
+#endif
+
+					// Bind	Warning	messages event
+					this.innerConnection.Database.WarningMessage = new WarningMessageCallback(this.OnWarningMessage);
+
+					// Update the connection state
+					this.OnStateChange(this.state, ConnectionState.Open);
+				}
+				catch (IscException ex)
+				{
+					this.OnStateChange(this.state, ConnectionState.Closed);
+					throw new FbException(ex.Message, ex);
+				}
+				catch
+				{
+					this.OnStateChange(this.state, ConnectionState.Closed);
+					throw;
+				}
+			}
+		}
+
+		public override async Task OpenAsync(CancellationToken cancellationToken)
+		{
+			lock (this)
+			{
+				if (string.IsNullOrEmpty(this.connectionString))
+				{
+					throw new InvalidOperationException("Connection String is not initialized.");
+				}
+				if (!this.IsClosed && this.state != ConnectionState.Connecting)
+				{
+					throw new InvalidOperationException("Connection already Open.");
+				}
+#if (!NET_CF)
+				if (this.options.Enlist && System.Transactions.Transaction.Current == null)
+				{
+					throw new InvalidOperationException("There is no active TransactionScope to enlist transactions.");
+				}
+#endif
+
+				this.DemandPermission();
+
+				try
+				{
+					this.OnStateChange(this.state, ConnectionState.Connecting);
+
+					if (this.options.Pooling)
+					{
+						this.innerConnection = FbPoolManager.Instance.GetPool(this.connectionString).CheckOut();
+						this.innerConnection.OwningConnection = this;
+					}
+					else
+					{
+						// Do not use Connection Pooling
+						this.innerConnection = new FbConnectionInternal(this.options, this);
+						await this.innerConnection.ConnectAsync(cancellationToken).ConfigureAwait(false);
+					}
+
+#if (!NET_CF)
+					try
+					{
+						this.innerConnection.EnlistTransaction(System.Transactions.Transaction.Current);
+					}
+					catch
+					{
+						// if enlistment fails clean up innerConnection
+						this.innerConnection.DisposeTransaction();
+
+						if (this.innerConnection.Pooled)
+						{
+							// Send connection return back to the Pool
+							FbPoolManager.Instance.GetPool(this.connectionString).CheckIn(this.innerConnection);
 						}
 						else
 						{
