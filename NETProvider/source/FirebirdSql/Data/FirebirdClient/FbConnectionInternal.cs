@@ -25,6 +25,8 @@ using System.Data;
 using System.Text;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
+using System.Threading;
 
 using FirebirdSql.Data.Common;
 using FirebirdSql.Data.Schema;
@@ -196,6 +198,37 @@ namespace FirebirdSql.Data.FirebirdClient
 				else
 				{
 					this.db.Attach(dpb, this.options.DataSource, this.options.Port, this.options.Database);
+				}
+			}
+			catch (IscException ex)
+			{
+				throw new FbException(ex.Message, ex);
+			}
+		}
+
+		public async Task ConnectAsync(CancellationToken cancellationToken)
+		{
+			if (Charset.GetCharset(this.options.Charset) == null)
+			{
+				throw new FbException("Invalid character set specified");
+			}
+
+			try
+			{
+				this.db = await ClientFactory.CreateDatabaseAsync(this.options).ConfigureAwait(false);
+				this.db.Charset = Charset.GetCharset(this.options.Charset);
+				this.db.Dialect = this.options.Dialect;
+				this.db.PacketSize = this.options.PacketSize;
+
+				DatabaseParameterBuffer dpb = this.BuildDpb(this.db, options);
+
+				if (options.FallIntoTrustedAuth)
+				{
+					await this.db.AttachWithTrustedAuthAsync(dpb, this.options.DataSource, this.options.Port, this.options.Database).ConfigureAwait(false);
+				}
+				else
+				{
+					await this.db.AttachAsync(dpb, this.options.DataSource, this.options.Port, this.options.Database).ConfigureAwait(false);
 				}
 			}
 			catch (IscException ex)
