@@ -22,6 +22,8 @@
 using System;
 using System.Data;
 using System.Collections;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FirebirdSql.Data.Common
 {
@@ -88,7 +90,9 @@ namespace FirebirdSql.Data.Common
 		#region · Methods ·
 
 		void Attach(DatabaseParameterBuffer dpb, string dataSource, int port, string database);
+		Task AttachAsync(DatabaseParameterBuffer dpb, string dataSource, int port, string database, CancellationToken cancellationToken);
 		void AttachWithTrustedAuth(DatabaseParameterBuffer dpb, string dataSource, int port, string database);
+		Task AttachWithTrustedAuthAsync(DatabaseParameterBuffer dpb, string dataSource, int port, string database, CancellationToken cancellationToken);
 		void Detach();
 
 		void CreateDatabase(DatabaseParameterBuffer dpb, string dataSource, int port, string database);
