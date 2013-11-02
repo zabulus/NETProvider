@@ -95,6 +95,26 @@ namespace FirebirdSql.Data.FirebirdClient
 			}
 		}
 
+		private static IDatabase CreateManagedDatabase(FbConnectionString options)
+		{
+			FirebirdSql.Data.Client.Managed.Version10.GdsConnection connection = new FirebirdSql.Data.Client.Managed.Version10.GdsConnection(options.DataSource, options.Port, options.PacketSize, Charset.GetCharset(options.Charset));
+
+			connection.Connect();
+			connection.Identify(options.Database);
+
+			switch (connection.ProtocolVersion)
+			{
+				case IscCodes.PROTOCOL_VERSION12:
+					return new FirebirdSql.Data.Client.Managed.Version12.GdsDatabase(connection);
+				case IscCodes.PROTOCOL_VERSION11:
+					return new FirebirdSql.Data.Client.Managed.Version11.GdsDatabase(connection);
+				case IscCodes.PROTOCOL_VERSION10:
+					return new FirebirdSql.Data.Client.Managed.Version10.GdsDatabase(connection);
+				default:
+					throw new NotSupportedException("Protocol not supported.");
+			}
+		}
+
 		private static async Task<IDatabase> CreateManagedDatabaseAsync(FbConnectionString options, CancellationToken cancellationToken)
 		{
 			FirebirdSql.Data.Client.Managed.Version10.GdsConnection connection = new FirebirdSql.Data.Client.Managed.Version10.GdsConnection(options.DataSource, options.Port, options.PacketSize, Charset.GetCharset(options.Charset));
