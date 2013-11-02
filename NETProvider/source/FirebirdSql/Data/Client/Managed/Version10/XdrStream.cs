@@ -166,6 +166,12 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 			this.innerStream.Flush();
 		}
+		public override Task FlushAsync()
+		{
+			this.CheckDisposed();
+
+			return this.innerStream.FlushAsync();
+		}
 
 		public override void SetLength(long length)
 		{
