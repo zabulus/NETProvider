@@ -25,6 +25,7 @@ using System;
 using System.Collections;
 using System.Threading;
 using System.Text;
+using System.Threading.Tasks;
 
 using FirebirdSql.Data.Common;
 
@@ -296,10 +297,22 @@ namespace FirebirdSql.Data.Client.Native
 				this.serverVersion = this.GetServerVersion();
 			}
 		}
+		public Task AttachAsync(DatabaseParameterBuffer dpb, string dataSource, int port, string database, CancellationToken cancellationToken)
+		{
+			// no async implementation
+			Attach(dpb, dataSource, port, database);
+			return Task.FromResult<object>(null);
+		}
 
 		public void AttachWithTrustedAuth(DatabaseParameterBuffer dpb, string dataSource, int port, string database)
 		{
 			throw new NotImplementedException("Trusted Auth isn't supported on Embedded Firebird.");
+		}
+		public Task AttachWithTrustedAuthAsync(DatabaseParameterBuffer dpb, string dataSource, int port, string database, CancellationToken cancellationToken)
+		{
+			// no async implementation
+			AttachWithTrustedAuth(dpb, dataSource, port, database);
+			return Task.FromResult<object>(null);
 		}
 
 		public void Detach()
