@@ -20,6 +20,8 @@
  */
 
 using System;
+using System.Threading.Tasks;
+
 using FirebirdSql.Data.Common;
 
 namespace FirebirdSql.Data.FirebirdClient
@@ -35,6 +37,29 @@ namespace FirebirdSql.Data.FirebirdClient
 				case FbServerType.Default:
 					// Managed Client
 					return CreateManagedDatabase(options);
+
+#if (!NET_CF)
+				case FbServerType.Embedded:
+					// Native (PInvoke) Client
+					return new FirebirdSql.Data.Client.Native.FesDatabase(options.ClientLibrary, Charset.GetCharset(options.Charset));
+
+				case FbServerType.Context:
+					// External Engine (PInvoke) Client
+					return new FirebirdSql.Data.Client.ExternalEngine.ExtDatabase();
+#endif
+
+				default:
+					throw new NotSupportedException("Specified server type is not correct.");
+			}
+		}
+
+		public static async Task<IDatabase> CreateDatabaseAsync(FbConnectionString options)
+		{
+			switch (options.ServerType)
+			{
+				case FbServerType.Default:
+					// Managed Client
+					return await CreateManagedDatabaseAsync(options).ConfigureAwait(false);
 
 #if (!NET_CF)
 				case FbServerType.Embedded:
@@ -69,12 +94,12 @@ namespace FirebirdSql.Data.FirebirdClient
 			}
 		}
 
-		private static IDatabase CreateManagedDatabase(FbConnectionString options)
+		private static async Task<IDatabase> CreateManagedDatabaseAsync(FbConnectionString options)
 		{
 			FirebirdSql.Data.Client.Managed.Version10.GdsConnection connection = new FirebirdSql.Data.Client.Managed.Version10.GdsConnection(options.DataSource, options.Port, options.PacketSize, Charset.GetCharset(options.Charset));
 
-			connection.Connect();
-			connection.Identify(options.Database);
+			await connection.ConnectAsync().ConfigureAwait(false);
+			await connection.IdentifyAsync(options.Database).ConfigureAwait(false);
 
 			switch (connection.ProtocolVersion)
 			{
