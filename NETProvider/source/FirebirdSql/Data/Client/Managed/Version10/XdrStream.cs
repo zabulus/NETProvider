@@ -272,6 +272,12 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 			this.ResetOperation();
 			return op;
 		}
+		public virtual async Task<int> ReadOperationAsync(CancellationToken cancellationToken)
+		{
+			int op = this.ValidOperationAvailable ? this.operation : await this.ReadNextOperationAsync(cancellationToken).ConfigureAwait(false);
+			this.ResetOperation();
+			return op;
+		}
 
 		public virtual int ReadNextOperation()
 		{
@@ -284,6 +290,21 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 				 * this	routine	is called 
 				 */
 				this.operation = this.ReadInt32();
+			} while (this.operation == IscCodes.op_dummy);
+
+			return this.operation;
+		}
+		public virtual async Task<int> ReadNextOperationAsync(CancellationToken cancellationToken)
+		{
+			do
+			{
+				/* loop	as long	as we are receiving	dummy packets, just
+				 * throwing	them away--note	that if	we are a server	we won't
+				 * be receiving	them, but it is	better to check	for	them at
+				 * this	level rather than try to catch them	in all places where
+				 * this	routine	is called 
+				 */
+				this.operation = await this.ReadInt32Async(cancellationToken).ConfigureAwait(false);
 			} while (this.operation == IscCodes.op_dummy);
 
 			return this.operation;
