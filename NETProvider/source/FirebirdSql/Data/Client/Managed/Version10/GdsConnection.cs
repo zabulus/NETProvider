@@ -328,12 +328,12 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 					await outputStream.WriteAsync(2, cancellationToken).ConfigureAwait(false);							// Preference weight
 				}
 				await outputStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-#warning
-				if (inputStream.ReadOperation() == IscCodes.op_accept)
+
+				if (await inputStream.ReadOperationAsync(cancellationToken).ConfigureAwait(false) == IscCodes.op_accept)
 				{
-					this.protocolVersion = inputStream.ReadInt32();	// Protocol	version
-					this.protocolArchitecture = inputStream.ReadInt32();	// Architecture	for	protocol
-					this.protocolMinimunType = inputStream.ReadInt32();	// Minimum type
+					this.protocolVersion = await inputStream.ReadInt32Async(cancellationToken).ConfigureAwait(false);	// Protocol	version
+					this.protocolArchitecture = await inputStream.ReadInt32Async(cancellationToken).ConfigureAwait(false);	// Architecture	for	protocol
+					this.protocolMinimunType = await inputStream.ReadInt32Async(cancellationToken).ConfigureAwait(false);	// Minimum type
 
 					if (this.protocolVersion < 0)
 					{
@@ -344,6 +344,7 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 				{
 					try
 					{
+#warning Async?
 						this.Disconnect();
 					}
 					catch

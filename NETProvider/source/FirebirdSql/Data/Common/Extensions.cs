@@ -19,6 +19,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -105,6 +106,11 @@ namespace FirebirdSql.Data.Common
 		public static Task ConnectAsync(this Socket socket, IPEndPoint remoteEP)
 		{
 			return Task.Factory.FromAsync<IPEndPoint>(socket.BeginConnect, socket.EndConnect, remoteEP, null);
+		}
+
+		public static Task WriteByteAsync(this Stream stream, byte value, CancellationToken cancellationToken)
+		{
+			return stream.WriteAsync(new[] { value }, 0, 1, cancellationToken);
 		}
 	}
 }
