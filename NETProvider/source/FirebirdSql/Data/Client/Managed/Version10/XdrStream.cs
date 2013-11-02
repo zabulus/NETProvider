@@ -166,11 +166,11 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 			this.innerStream.Flush();
 		}
-		public override Task FlushAsync()
+		public override Task FlushAsync(CancellationToken cancellationToken)
 		{
 			this.CheckDisposed();
 
-			return this.innerStream.FlushAsync();
+			return this.innerStream.FlushAsync(cancellationToken);
 		}
 
 		public override void SetLength(long length)
