@@ -25,6 +25,8 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
 
 using FirebirdSql.Data.Common;
 
@@ -500,6 +502,10 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 		{
 			this.WriteOpaque(buffer, buffer.Length);
 		}
+		public Task WriteOpaqueAsync(byte[] buffer, CancellationToken cancellationToken)
+		{
+			return this.WriteOpaqueAsync(buffer, buffer.Length);
+		}
 
 		public void WriteOpaque(byte[] buffer, int length)
 		{
@@ -510,10 +516,23 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 				this.Write(Pad, 0, ((4 - length) & 3));
 			}
 		}
+		public async Task WriteOpaqueAsync(byte[] buffer, int length, CancellationToken cancellationToken)
+		{
+			if (buffer != null && length > 0)
+			{
+				await this.WriteAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+				await this.WriteAsync(Fill, 0, length - buffer.Length, cancellationToken).ConfigureAwait(false);
+				await this.WriteAsync(Pad, 0, ((4 - length) & 3), cancellationToken).ConfigureAwait(false);
+			}
+		}
 
 		public void WriteBuffer(byte[] buffer)
 		{
 			this.WriteBuffer(buffer, buffer == null ? 0 : buffer.Length);
+		}
+		public Task WriteBufferAsync(byte[] buffer, CancellationToken cancellationToken)
+		{
+			return this.WriteBufferAsync(buffer, buffer == null ? 0 : buffer.Length, cancellationToken);
 		}
 
 		public void WriteBuffer(byte[] buffer, int length)
@@ -524,6 +543,16 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 			{
 				this.Write(buffer, 0, length);
 				this.Write(Pad, 0, ((4 - length) & 3));
+			}
+		}
+		public async Task WriteBufferAsync(byte[] buffer, int length, CancellationToken cancellationToken)
+		{
+			await this.WriteAsync(length, cancellationToken).ConfigureAwait(false);
+
+			if (buffer != null && length > 0)
+			{
+				await this.WriteAsync(buffer, 0, length, cancellationToken).ConfigureAwait(false);
+				await this.WriteAsync(Pad, 0, ((4 - length) & 3), cancellationToken).ConfigureAwait(false);
 			}
 		}
 
@@ -543,6 +572,23 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 			this.Write(buffer, 0, length);
 
 			this.Write(Pad, 0, ((4 - length + 2) & 3));
+		}
+		public async Task WriteBlobBufferAsync(byte[] buffer, CancellationToken cancellationToken)
+		{
+			int length = buffer.Length;	// 2 for short for buffer length
+
+			if (length > short.MaxValue)
+			{
+				throw (new IOException()); //Need a	value???
+			}
+
+			await this.WriteAsync(length + 2, cancellationToken).ConfigureAwait(false);
+			await this.WriteAsync(length + 2, cancellationToken).ConfigureAwait(false);	//bizarre but true!	three copies of	the	length
+			await this.WriteByteAsync((byte)((length >> 0) & 0xff), cancellationToken).ConfigureAwait(false);
+			await this.WriteByteAsync((byte)((length >> 8) & 0xff), cancellationToken).ConfigureAwait(false);
+			await this.WriteAsync(buffer, 0, length, cancellationToken).ConfigureAwait(false);
+
+			await this.WriteAsync(Pad, 0, ((4 - length + 2) & 3), cancellationToken).ConfigureAwait(false);
 		}
 
 		public void WriteTyped(int type, byte[] buffer)
@@ -564,6 +610,25 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 			}
 			this.Write(Pad, 0, ((4 - length) & 3));
 		}
+		public async Task WriteTypedAsync(int type, byte[] buffer, CancellationToken cancellationToken)
+		{
+			int length;
+
+			if (buffer == null)
+			{
+				await this.WriteAsync(1, cancellationToken).CoonfigureAwait(false);
+				await this.WriteByteAsync((byte)type, cancellationToken).CoonfigureAwait(false);
+				length = 1;
+			}
+			else
+			{
+				length = buffer.Length + 1;
+				await this.WriteAsync(length, cancellationToken).CoonfigureAwait(false);
+				await this.WriteByteAsync((byte)type, cancellationToken).CoonfigureAwait(false);
+				await this.WriteAsync(buffer, 0, buffer.Length, cancellationToken).CoonfigureAwait(false);
+			}
+			await this.WriteAsync(Pad, 0, ((4 - length) & 3), cancellationToken).CoonfigureAwait(false);
+		}
 
 		public void Write(string value)
 		{
@@ -571,20 +636,38 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 			this.WriteBuffer(buffer, buffer.Length);
 		}
+		public Task WriteAsync(string value, CancellationToken cancellationToken)
+		{
+			byte[] buffer = this.charset.GetBytes(value);
+
+			return this.WriteBufferAsync(buffer, buffer.Length, cancellationToken);
+		}
 
 		public void Write(short value)
 		{
 			this.Write((int)value);
+		}
+		public Task WriteAsync(short value, CancellationToken cancellationToken)
+		{
+			return this.WriteAsync((int)value, cancellationToken);
 		}
 
 		public void Write(int value)
 		{
 			this.Write(BitConverter.GetBytes(IPAddress.NetworkToHostOrder(value)), 0, 4);
 		}
+		public Task WriteAsync(int value, CancellationToken cancellationToken)
+		{
+			return this.WriteAsync(BitConverter.GetBytes(IPAddress.NetworkToHostOrder(value)), 0, 4, cancellationToken);
+		}
 
 		public void Write(long value)
 		{
 			this.Write(BitConverter.GetBytes(IPAddress.NetworkToHostOrder(value)), 0, 8);
+		}
+		public Task WriteAsync(long value, CancellationToken cancellationToken)
+		{
+			return this.WriteAsync(BitConverter.GetBytes(IPAddress.NetworkToHostOrder(value)), 0, 8, cancellationToken);
 		}
 
 		public void Write(float value)
@@ -593,12 +676,24 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 			this.Write(BitConverter.ToInt32(buffer, 0));
 		}
+		public Task WriteAsync(float value, CancellationToken cancellationToken)
+		{
+			byte[] buffer = BitConverter.GetBytes(value);
+
+			return this.WriteAsync(BitConverter.ToInt32(buffer, 0), cancellationToken);
+		}
 
 		public void Write(double value)
 		{
 			byte[] buffer = BitConverter.GetBytes(value);
 
 			this.Write(BitConverter.ToInt64(buffer, 0));
+		}
+		public Task WriteAsync(double value, CancellationToken cancellationToken)
+		{
+			byte[] buffer = BitConverter.GetBytes(value);
+
+			return this.WriteAsync(BitConverter.ToInt64(buffer, 0), cancellationToken);
 		}
 
 		public void Write(decimal value, int type, int scale)
@@ -626,10 +721,35 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 					break;
 			}
 		}
+		public Task WriteAsync(decimal value, int type, int scale, CancellationToken cancellationToken)
+		{
+			object numeric = TypeEncoder.EncodeDecimal(value, scale, type);
+
+			switch (type & ~1)
+			{
+				case IscCodes.SQL_SHORT:
+					return this.WriteAsync((short)numeric, cancellationToken);
+
+				case IscCodes.SQL_LONG:
+					return this.WriteAsync((int)numeric, cancellationToken);
+
+				case IscCodes.SQL_QUAD:
+				case IscCodes.SQL_INT64:
+					return this.WriteAsync((long)numeric, cancellationToken);
+
+				case IscCodes.SQL_DOUBLE:
+				case IscCodes.SQL_D_FLOAT:
+					return this.WriteAsync((double)value, cancellationToken);
+			}
+		}
 
 		public void Write(bool value)
 		{
 			this.Write((short)(value ? 1 : 0));
+		}
+		public Task WriteAsync(bool value, CancellationToken cancellationToken)
+		{
+			return this.WriteAsync((short)(value ? 1 : 0), cancellationToken);
 		}
 
 		public void Write(DateTime value)
@@ -637,15 +757,28 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 			this.WriteDate(value);
 			this.WriteTime(TypeHelper.DateTimeToTimeSpan(value));
 		}
+		public async Task WriteAsync(DateTime value, CancellationToken cancellationToken)
+		{
+			await this.WriteDateAsync(value, cancellationToken).ConfigureAwait(false);
+			await this.WriteTimeAsync(TypeHelper.DateTimeToTimeSpan(value), cancellationToken).ConfigureAwait(false);
+		}
 
 		public void WriteDate(DateTime value)
 		{
 			this.Write(TypeEncoder.EncodeDate(Convert.ToDateTime(value)));
 		}
+		public Task WriteDateAsync(DateTime value, CancellationToken cancellationToken)
+		{
+			return this.WriteAsync(TypeEncoder.EncodeDate(Convert.ToDateTime(value)), cancellationToken);
+		}
 
 		public void WriteTime(TimeSpan value)
 		{
 			this.Write(TypeEncoder.EncodeTime(value));
+		}
+		public Task WriteTimeAsync(TimeSpan value, CancellationToken cancellationToken)
+		{
+			return this.WriteAsync(TypeEncoder.EncodeTime(value), cancellationToken);
 		}
 
 		public void Write(Descriptor descriptor)
@@ -653,6 +786,13 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 			for (int i = 0; i < descriptor.Count; i++)
 			{
 				this.Write(descriptor[i]);
+			}
+		}
+		public async Task WriteAsync(Descriptor descriptor, CancellationToken cancellationToken)
+		{
+			for (int i = 0; i < descriptor.Count; i++)
+			{
+				await this.WriteAsync(descriptor[i], cancellationToken).ConfigureAwait(false);
 			}
 		}
 
@@ -770,6 +910,121 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 				throw new IscException(IscCodes.isc_net_write_err);
 			}
 		}
+		public async Task WriteAsync(DbField param, CancellationToken cancellationToken)
+		{
+			try
+			{
+				if (param.DbDataType != DbDataType.Null)
+				{
+					param.FixNull();
+
+					switch (param.DbDataType)
+					{
+						case DbDataType.Char:
+							if (param.Charset.IsOctetsCharset)
+							{
+								await this.WriteOpaqueAsync(param.DbValue.GetBinary(), param.Length, cancellationToken).ConfigureAwait(false);
+							}
+							else
+							{
+								string svalue = param.DbValue.GetString();
+
+								if ((param.Length % param.Charset.BytesPerCharacter) == 0 &&
+									svalue.Length > param.CharCount)
+								{
+									throw new IscException(new[] { IscCodes.isc_arith_except, IscCodes.isc_string_truncation });
+								}
+
+								await this.WriteOpaqueAsync(param.Charset.GetBytes(svalue), param.Length, cancellationToken).ConfigureAwait(false);
+							}
+							break;
+
+						case DbDataType.VarChar:
+							if (param.Charset.IsOctetsCharset)
+							{
+								await this.WriteOpaqueAsync(param.DbValue.GetBinary(), param.Length, cancellationToken).ConfigureAwait(false);
+							}
+							else
+							{
+								string svalue = param.DbValue.GetString();
+
+								if ((param.Length % param.Charset.BytesPerCharacter) == 0 &&
+									svalue.Length > param.CharCount)
+								{
+									throw new IscException(new[] { IscCodes.isc_arith_except, IscCodes.isc_string_truncation });
+								}
+
+								byte[] data = param.Charset.GetBytes(svalue);
+
+								await this.WriteBufferAsync(data, data.Length, cancellationToken).ConfigureAwait(false);
+							}
+							break;
+
+						case DbDataType.SmallInt:
+							await this.WriteAsync(param.DbValue.GetInt16(), cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.Integer:
+							await this.WriteAsync(param.DbValue.GetInt32(), cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.BigInt:
+						case DbDataType.Array:
+						case DbDataType.Binary:
+						case DbDataType.Text:
+							await this.WriteAsync(param.DbValue.GetInt64(), cancellationToken).ConfigureAwait(false);;
+							break;
+
+						case DbDataType.Decimal:
+						case DbDataType.Numeric:
+							await this.WriteAsync(
+								param.DbValue.GetDecimal(),
+								param.DataType,
+								param.NumericScale,
+								cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.Float:
+							await this.WriteAsync(param.DbValue.GetFloat(), cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.Guid:
+							await this.WriteOpaqueAsync(param.DbValue.GetGuid().ToByteArray(), cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.Double:
+							await this.WriteAsync(param.DbValue.GetDouble(), cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.Date:
+							await this.WriteAsync(param.DbValue.GetDate(), cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.Time:
+							await this.WriteAsync(param.DbValue.GetTime(), cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.TimeStamp:
+							await this.WriteAsync(param.DbValue.GetDate(), cancellationToken).ConfigureAwait(false);
+							await this.WriteAsync(param.DbValue.GetTime(), cancellationToken).ConfigureAwait(false);
+							break;
+
+						case DbDataType.Boolean:
+							await this.WriteAsync(Convert.ToBoolean(param.Value), cancellationToken).ConfigureAwait(false);
+							break;
+
+						default:
+							throw new IscException("Unknown sql data type: " + param.DataType);
+					}
+				}
+
+				await this.WriteAsync(param.NullFlag, cancellationToken).ConfigureAwait(false);
+			}
+			catch (IOException)
+			{
+				throw new IscException(IscCodes.isc_net_write_err);
+			}
+		}
 
 		#endregion
 
@@ -790,7 +1045,7 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 
 		#endregion
 
-		#region · Private Methods ·
+		#region · Private Properties ·
 
 		private bool ValidOperationAvailable
 		{
