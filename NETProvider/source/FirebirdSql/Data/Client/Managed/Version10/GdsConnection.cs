@@ -136,7 +136,7 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 		public virtual void Connect2(Action callback)
 		{
 			this.Connect();
-			this.timer = new Timer(delegate(object o)
+			this.timer = new Timer(_ =>
 			{
 				bool oldBlockingState = this.socket.Blocking;
 				try
