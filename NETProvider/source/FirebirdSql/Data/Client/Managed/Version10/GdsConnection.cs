@@ -18,13 +18,13 @@
  */
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Permissions;
 using System.Text;
 using System.Threading;
-
 using FirebirdSql.Data.Common;
 
 namespace FirebirdSql.Data.Client.Managed.Version10
@@ -144,6 +144,7 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 					byte[] tmp = new byte[1];
 					this.socket.Blocking = false;
 					this.socket.Send(tmp, 0, SocketFlags.None);
+					Debug.WriteLine("Events alive.");
 				}
 				catch (SocketException e)
 				{
