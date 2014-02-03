@@ -144,7 +144,7 @@ namespace FirebirdSql.Data.Client.Managed.Version10
 					byte[] tmp = new byte[1];
 					this.socket.Blocking = false;
 					this.socket.Send(tmp, 0, SocketFlags.None);
-					Debug.WriteLine("Events alive.");
+					Trace.WriteLine("Events alive.");
 				}
 				catch (SocketException e)
 				{
