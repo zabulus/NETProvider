@@ -1,4 +1,4 @@
-/*
+﻿/*
  *	Firebird ADO.NET Data provider for .NET and Mono 
  * 
  *	   The contents of this file are subject to the Initial 
@@ -12,38 +12,22 @@
  *	   express or implied. See the License for the specific 
  *	   language governing rights and limitations under the License.
  * 
- *	Copyright (c) 2002, 2007 Carlos Guzman Alvarez
+ *	Copyright (c) 2014 Jiri Cincura (jiri@cincura.net)
  *	All Rights Reserved.
+ *	
  */
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-namespace FirebirdSql.Data.Services
+namespace FirebirdSql.Data.EntityFramework6
 {
-	public sealed class ServiceOutputEventArgs : EventArgs
+	public interface IFbMigrationSqlGeneratorBehavior
 	{
-		#region Fields
-
-		private string message;
-
-		#endregion
-
-		#region Properties
-
-		public string Message
-		{
-			get { return this.message; }
-		}
-
-		#endregion
-
-		#region Constructors
-
-		public ServiceOutputEventArgs(string message)
-		{
-			this.message = message;
-		}
-
-		#endregion
+		IEnumerable<string> CreateIdentityForColumn(string columnName, string tableName);
+		IEnumerable<string> DropIdentityForColumn(string columnName, string tableName);
 	}
 }

@@ -36,7 +36,7 @@ namespace FirebirdSql.Data.FirebirdClient
 	[DefaultEvent("InfoMessage")]
 	public sealed class FbConnection : DbConnection, ICloneable
 	{
-		#region · Static Pool Handling Methods ·
+		#region Static Pool Handling Methods
 
 		public static void ClearAllPools()
 		{
@@ -53,19 +53,14 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Static Database Creation/Drop methods ·
-
-		public static void CreateDatabase(string connectionString)
-		{
-			FbConnection.CreateDatabase(connectionString, 4096, true, false);
-		}
+		#region Static Database Creation/Drop methods
 
 		public static void CreateDatabase(string connectionString, bool overwrite)
 		{
-			FbConnection.CreateDatabase(connectionString, 4096, true, overwrite);
+			FbConnection.CreateDatabase(connectionString, overwrite: overwrite);
 		}
 
-		public static void CreateDatabase(string connectionString, int pageSize, bool forcedWrites, bool overwrite)
+		public static void CreateDatabase(string connectionString, int pageSize = 4096, bool forcedWrites = true, bool overwrite = false)
 		{
 			FbConnectionString options = new FbConnectionString(connectionString);
 			options.Validate();
@@ -147,7 +142,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Events ·
+		#region Events
 
 		public override event StateChangeEventHandler StateChange;
 
@@ -155,7 +150,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Fields ·
+		#region Fields
 
 		private FbConnectionInternal innerConnection;
 		private ConnectionState state;
@@ -165,7 +160,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Properties ·
+		#region Properties
 
 		[Category("Data")]
 		[SettingsBindable(true)]
@@ -246,7 +241,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Internal Properties ·
+		#region Internal Properties
 
 		internal FbConnectionInternal InnerConnection
 		{
@@ -265,7 +260,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Protected Properties ·
+		#region Protected Properties
 
 		protected override DbProviderFactory DbProviderFactory
 		{
@@ -274,7 +269,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Constructors ·
+		#region Constructors
 
 		public FbConnection()
 			: this(null)
@@ -296,7 +291,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · IDisposable methods ·
+		#region IDisposable methods
 
 		protected override void Dispose(bool disposing)
 		{
@@ -332,7 +327,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · ICloneable Methods ·
+		#region ICloneable Methods
 
 		object ICloneable.Clone()
 		{
@@ -341,7 +336,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Transaction Handling Methods ·
+		#region Transaction Handling Methods
 
 		public new FbTransaction BeginTransaction()
 		{
@@ -379,7 +374,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Transaction Enlistement ·
+		#region Transaction Enlistement
 
 		public override void EnlistTransaction(System.Transactions.Transaction transaction)
 		{
@@ -390,7 +385,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · DbConnection methods ·
+		#region DbConnection methods
 
 		protected override DbCommand CreateDbCommand()
 		{
@@ -404,7 +399,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Database Schema Methods ·
+		#region Database Schema Methods
 
 		public override DataTable GetSchema()
 		{
@@ -425,7 +420,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Methods ·
+		#region Methods
 
 		public new FbCommand CreateCommand()
 		{
@@ -605,7 +600,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Private Methods ·
+		#region Private Methods
 
 		internal void DemandPermission()
 		{
@@ -623,7 +618,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		#endregion
 
-		#region · Event Handlers ·
+		#region Event Handlers
 
 		private void OnWarningMessage(IscException warning)
 		{

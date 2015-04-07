@@ -39,6 +39,9 @@ using System.Data.Entity.Core.Common.CommandTrees;
 using System.Data.Entity.Core.Metadata.Edm;
 using System.Data.Entity.Infrastructure;
 using System.Data.Entity.Infrastructure.DependencyResolution;
+using System.Data.Entity.Migrations.Sql;
+using System.Data.Entity.Migrations.History;
+using System.Data.Entity.Infrastructure.Interception;
 
 using FirebirdSql.Data.EntityFramework6.SqlGen;
 #endif
@@ -58,12 +61,15 @@ namespace FirebirdSql.Data.EntityFramework6
 	public class FbProviderServices : DbProviderServices
 #pragma warning restore 3009
 	{
+		public const string ProviderInvariantName = "FirebirdSql.Data.FirebirdClient";
 		public static readonly FbProviderServices Instance = new FbProviderServices();
 
 		public FbProviderServices()
 		{
 #if (EF_6)
 			AddDependencyResolver(new SingletonDependencyResolver<IDbConnectionFactory>(new FbConnectionFactory()));
+			AddDependencyResolver(new SingletonDependencyResolver<Func<MigrationSqlGenerator>>(() => new FbMigrationSqlGenerator(), ProviderInvariantName));
+			DbInterception.Add(new FbMigrationsTransactionsInterceptor());
 #endif
 		}
 
@@ -408,14 +414,17 @@ namespace FirebirdSql.Data.EntityFramework6
 			StoreItemCollection storeItemCollection)
 #pragma warning restore 3001
 		{
-			FbConnection.CreateDatabase(connection.ConnectionString);
+			FbConnection.CreateDatabase(connection.ConnectionString, pageSize: 16384);
 			string script = DbCreateDatabaseScript(GetDbProviderManifestToken(connection), storeItemCollection);
 			FbScript fbScript = new FbScript(script);
 			fbScript.Parse();
-			using (var fbConnection = new FbConnection(connection.ConnectionString))
+			if (fbScript.Results.Any())
 			{
-				var execution = new FbBatchExecution(fbConnection, fbScript);
-				execution.Execute();
+				using (var fbConnection = new FbConnection(connection.ConnectionString))
+				{
+					var execution = new FbBatchExecution(fbConnection, fbScript);
+					execution.Execute();
+				}
 			}
 		}
 

@@ -50,17 +50,18 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 	/// </summary>
 	class ExpressionTranslator : DbExpressionVisitor
 	{
-		#region · Fields ·
+		#region Fields
 
 		private readonly StringBuilder commandText;
 		private readonly DbModificationCommandTree commandTree;
 		private readonly List<DbParameter> parameters;
 		private readonly Dictionary<EdmMember, List<DbParameter>> memberValues;
+		private readonly bool generateParameters;
 		private int parameterNameCount = 0;
 
 		#endregion
 
-		#region · Internal Properties ·
+		#region Internal Properties
 
 		internal List<DbParameter> Parameters
 		{
@@ -74,7 +75,7 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 
 		#endregion
 
-		#region · Unsupported Visit Methods ·
+		#region Unsupported Visit Methods
 
 		public override void Visit(DbApplyExpression expression)
 		{
@@ -238,7 +239,7 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 
 		#endregion
 
-		#region · Methods ·
+		#region Methods
 
 		public override void Visit(DbAndExpression expression)
 		{
@@ -275,8 +276,19 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 
 		public override void Visit(DbConstantExpression expression)
 		{
-			FbParameter parameter = CreateParameter(expression.Value, expression.ResultType);
-			commandText.Append(parameter.ParameterName);
+			if (generateParameters)
+			{
+				var parameter = CreateParameter(expression.Value, expression.ResultType);
+				commandText.Append(parameter.ParameterName);
+			}
+			else
+			{
+				using (var writer = new SqlWriter(commandText))
+				{
+					var sqlGenerator = new SqlGenerator();
+					sqlGenerator.WriteSql(writer, expression.Accept(sqlGenerator));
+				}
+			}
 		}
 
 		public override void Visit(DbScanExpression expression)
@@ -316,7 +328,7 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 
 		#endregion
 
-		#region · Internal Methods ·
+		#region Internal Methods
 
 		/// <summary>
 		/// Initialize a new expression translator populating the given string builder
@@ -329,7 +341,8 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 		internal ExpressionTranslator(
 			StringBuilder commandText,
 			DbModificationCommandTree commandTree,
-			bool preserveMemberValues)
+			bool preserveMemberValues,
+			bool generateParameters)
 		{
 			Debug.Assert(null != commandText);
 			Debug.Assert(null != commandTree);
@@ -338,6 +351,7 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 			this.commandTree = commandTree;
 			this.parameters = new List<DbParameter>();
 			this.memberValues = preserveMemberValues ? new Dictionary<EdmMember, List<DbParameter>>() : null;
+			this.generateParameters = generateParameters;
 		}
 
 		// generate parameter (name based on parameter ordinal)
@@ -388,7 +402,7 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 
 		#endregion
 
-		#region · Private Methods ·
+		#region Private Methods
 
 		private void VisitBinary(DbBinaryExpression expression, string separator)
 		{
