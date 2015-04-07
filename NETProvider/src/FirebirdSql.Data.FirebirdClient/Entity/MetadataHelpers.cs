@@ -23,6 +23,9 @@ using System.Data;
 using System.Data.Common;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
+using System.Linq;
 #if (!EF_6)
 using System.Data.Metadata.Edm;
 #else
