@@ -29,8 +29,8 @@ namespace FirebirdSql.Data.Services
 	{
 		#region · Constructors ·
 
-		public FbServerProperties()
-			: base()
+		public FbServerProperties(string connectionString = null)
+			: base(connectionString)
 		{ }
 
 		#endregion
@@ -109,7 +109,7 @@ namespace FirebirdSql.Data.Services
 
 		#endregion
 
-		#region · Constructors ·
+		#region · Static Methods ·
 
 		public static Version ParseServerVersion(string version)
 		{

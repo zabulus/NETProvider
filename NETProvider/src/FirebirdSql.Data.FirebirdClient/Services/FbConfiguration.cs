@@ -13,6 +13,7 @@
  *	   language governing rights and limitations under the License.
  * 
  *	Copyright (c) 2002, 2007 Carlos Guzman Alvarez
+ *	Copyright (c) 2014 Jiri Cincura (jiri@cincura.net)
  *	All Rights Reserved.
  */
 
@@ -26,10 +27,9 @@ namespace FirebirdSql.Data.Services
 	{
 		#region · Constructors ·
 
-		public FbConfiguration()
-			: base()
-		{
-		}
+		public FbConfiguration(string connectionString = null)
+			: base(connectionString)
+		{ }
 
 		#endregion
 
@@ -37,7 +37,6 @@ namespace FirebirdSql.Data.Services
 
 		public void SetSqlDialect(int sqlDialect)
 		{
-			// Configure Spb
 			this.StartSpb = new ServiceParameterBuffer();
 
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
@@ -46,7 +45,6 @@ namespace FirebirdSql.Data.Services
 
 			this.Open();
 
-			// Start execution
 			this.StartTask();
 
 			this.Close();
@@ -54,7 +52,6 @@ namespace FirebirdSql.Data.Services
 
 		public void SetSweepInterval(int sweepInterval)
 		{
-			// Configure Spb
 			this.StartSpb = new ServiceParameterBuffer();
 
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
@@ -63,7 +60,6 @@ namespace FirebirdSql.Data.Services
 
 			this.Open();
 
-			// Start execution
 			this.StartTask();
 
 			this.Close();
@@ -71,7 +67,6 @@ namespace FirebirdSql.Data.Services
 
 		public void SetPageBuffers(int pageBuffers)
 		{
-			// Configure Spb
 			this.StartSpb = new ServiceParameterBuffer();
 
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
@@ -80,7 +75,6 @@ namespace FirebirdSql.Data.Services
 
 			this.Open();
 
-			// Start execution
 			this.StartTask();
 
 			this.Close();
@@ -88,7 +82,6 @@ namespace FirebirdSql.Data.Services
 
 		public void DatabaseShutdown(FbShutdownMode mode, int seconds)
 		{
-			// Configure Spb
 			this.StartSpb = new ServiceParameterBuffer();
 
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
@@ -111,7 +104,37 @@ namespace FirebirdSql.Data.Services
 
 			this.Open();
 
-			// Start execution
+			this.StartTask();
+
+			this.Close();
+		}
+
+		public void DatabaseShutdown2(FbShutdownOnlineMode mode, FbShutdownType type, int seconds)
+		{
+			this.StartSpb = new ServiceParameterBuffer();
+
+			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
+			this.StartSpb.Append(IscCodes.isc_spb_dbname, this.Database);
+
+			this.StartSpb.Append(IscCodes.isc_spb_prp_shutdown_mode, FbShutdownOnlineModeToIscCode(mode));
+
+			switch (type)
+			{
+				case FbShutdownType.ForceShutdown:
+					this.StartSpb.Append(IscCodes.isc_spb_prp_force_shutdown, seconds);
+					break;
+
+				case FbShutdownType.AttachmentsShutdown:
+					this.StartSpb.Append(IscCodes.isc_spb_prp_attachments_shutdown, seconds);
+					break;
+
+				case FbShutdownType.TransactionsShutdown:
+					this.StartSpb.Append(IscCodes.isc_spb_prp_transactions_shutdown, seconds);
+					break;
+			}
+
+			this.Open();
+
 			this.StartTask();
 
 			this.Close();
@@ -119,7 +142,6 @@ namespace FirebirdSql.Data.Services
 
 		public void DatabaseOnline()
 		{
-			// Configure Spb
 			this.StartSpb = new ServiceParameterBuffer();
 
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
@@ -128,7 +150,22 @@ namespace FirebirdSql.Data.Services
 
 			this.Open();
 
-			// Start execution
+			this.StartTask();
+
+			this.Close();
+		}
+
+		public void DatabaseOnline2(FbShutdownOnlineMode mode)
+		{
+			this.StartSpb = new ServiceParameterBuffer();
+
+			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
+			this.StartSpb.Append(IscCodes.isc_spb_dbname, this.Database);
+
+			this.StartSpb.Append(IscCodes.isc_spb_prp_online_mode, FbShutdownOnlineModeToIscCode(mode));
+
+			this.Open();
+
 			this.StartTask();
 
 			this.Close();
@@ -136,7 +173,6 @@ namespace FirebirdSql.Data.Services
 
 		public void ActivateShadows()
 		{
-			// Configure Spb
 			this.StartSpb = new ServiceParameterBuffer();
 
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
@@ -145,7 +181,6 @@ namespace FirebirdSql.Data.Services
 
 			this.Open();
 
-			// Start execution
 			this.StartTask();
 
 			this.Close();
@@ -153,13 +188,11 @@ namespace FirebirdSql.Data.Services
 
 		public void SetForcedWrites(bool forcedWrites)
 		{
-			// Configure Spb
 			this.StartSpb = new ServiceParameterBuffer();
 
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
 			this.StartSpb.Append(IscCodes.isc_spb_dbname, this.Database);
 
-			// WriteMode
 			if (forcedWrites)
 			{
 				this.StartSpb.Append(IscCodes.isc_spb_prp_write_mode, (byte)IscCodes.isc_spb_prp_wm_sync);
@@ -171,7 +204,6 @@ namespace FirebirdSql.Data.Services
 
 			this.Open();
 
-			// Start execution
 			this.StartTask();
 
 			this.Close();
@@ -184,7 +216,6 @@ namespace FirebirdSql.Data.Services
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
 			this.StartSpb.Append(IscCodes.isc_spb_dbname, this.Database);
 
-			// Reserve Space
 			if (reserveSpace)
 			{
 				this.StartSpb.Append(IscCodes.isc_spb_prp_reserve_space, (byte)IscCodes.isc_spb_prp_res);
@@ -196,7 +227,6 @@ namespace FirebirdSql.Data.Services
 
 			this.Open();
 
-			// Start execution
 			this.StartTask();
 
 			this.Close();
@@ -204,27 +234,38 @@ namespace FirebirdSql.Data.Services
 
 		public void SetAccessMode(bool readOnly)
 		{
-			// Configure Spb
 			this.StartSpb = new ServiceParameterBuffer();
 
 			this.StartSpb.Append(IscCodes.isc_action_svc_properties);
 			this.StartSpb.Append(IscCodes.isc_spb_dbname, this.Database);
-
-			if (readOnly)
-			{
-				this.StartSpb.Append(IscCodes.isc_spb_prp_access_mode, (byte)IscCodes.isc_spb_prp_am_readonly);
-			}
-			else
-			{
-				this.StartSpb.Append(IscCodes.isc_spb_prp_access_mode, (byte)IscCodes.isc_spb_prp_am_readwrite);
-			}
+			this.StartSpb.Append(IscCodes.isc_spb_prp_access_mode, (byte)(readOnly ? IscCodes.isc_spb_prp_am_readonly : IscCodes.isc_spb_prp_am_readwrite));
 
 			this.Open();
 
-			// Start execution
 			this.StartTask();
 
 			this.Close();
+		}
+
+		#endregion
+
+		#region · Private Methods ·
+
+		byte FbShutdownOnlineModeToIscCode(FbShutdownOnlineMode mode)
+		{
+			switch (mode)
+			{
+				case FbShutdownOnlineMode.Normal:
+					return IscCodes.isc_spb_prp_sm_normal;
+				case FbShutdownOnlineMode.Multi:
+					return IscCodes.isc_spb_prp_sm_multi;
+				case FbShutdownOnlineMode.Single:
+					return IscCodes.isc_spb_prp_sm_single;
+				case FbShutdownOnlineMode.Full:
+					return IscCodes.isc_spb_prp_sm_full;
+				default:
+					throw new ArgumentOutOfRangeException();
+			}
 		}
 
 		#endregion

@@ -459,8 +459,9 @@ namespace FirebirdSql.Data.Client.Native
 						break;
 
 					case DbDataType.TimeStamp:
-						writer.Write(TypeEncoder.EncodeDate(Convert.ToDateTime(source, CultureInfo.CurrentCulture.DateTimeFormat)));
-						writer.Write(TypeEncoder.EncodeTime(((DateTime)source).TimeOfDay));
+						var dt = Convert.ToDateTime(source, CultureInfo.CurrentCulture.DateTimeFormat);
+						writer.Write(TypeEncoder.EncodeDate(dt));
+						writer.Write(TypeEncoder.EncodeTime(TypeHelper.DateTimeToTimeSpan(dt)));
 						break;
 
 					default:

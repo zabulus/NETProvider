@@ -52,14 +52,15 @@ namespace FirebirdSql.Data.Services
 
 		public bool Verbose { get; set; }
 		public int? PageBuffers { get; set; }
+		public bool ReadOnly { get; set; }
 		public FbRestoreFlags Options { get; set; }
 
 		#endregion
 
 		#region · Constructors ·
 
-		public FbRestore()
-			: base()
+		public FbRestore(string connectionString = null)
+			: base(connectionString)
 		{
 			this.backupFiles = new FbBackupFileCollection();
 		}
@@ -72,7 +73,6 @@ namespace FirebirdSql.Data.Services
 		{
 			try
 			{
-				// Configure Spb
 				this.StartSpb = new ServiceParameterBuffer();
 
 				this.StartSpb.Append(IscCodes.isc_action_svc_restore);
@@ -93,11 +93,11 @@ namespace FirebirdSql.Data.Services
 					this.StartSpb.Append(IscCodes.isc_spb_res_buffers, (int)this.PageBuffers);
 				if (this.pageSize.HasValue)
 					this.StartSpb.Append(IscCodes.isc_spb_res_page_size, (int)this.pageSize);
+				this.StartSpb.Append(IscCodes.isc_spb_res_access_mode, (byte)(this.ReadOnly ? IscCodes.isc_spb_res_am_readonly : IscCodes.isc_spb_res_am_readwrite));
 				this.StartSpb.Append(IscCodes.isc_spb_options, (int)this.Options);
 
 				this.Open();
 
-				// Start execution
 				this.StartTask();
 
 				if (this.Verbose)

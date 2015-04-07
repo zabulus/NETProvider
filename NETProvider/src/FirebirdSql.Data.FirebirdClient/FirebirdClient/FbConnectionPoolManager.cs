@@ -12,7 +12,7 @@
  *     express or implied.  See the License for the specific 
  *     language governing rights and limitations under the License.
  * 
- *  Copyright (c) 2013 Jiri Cincura (jiri@cincura.net)
+ *  Copyright (c) 2013-2014 Jiri Cincura (jiri@cincura.net)
  *  All Rights Reserved.
  */
 
@@ -132,7 +132,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 					var now = DateTimeOffset.UtcNow;
 					var available = _available.ToArray();
-					var keep = available.Where(x => x.Created.AddSeconds(_connectionString.ConnectionLifeTime) > now).ToArray();
+					var keep = available.Where(x => IsAlive(_connectionString.ConnectionLifeTime, x.Created, now)).ToArray();
 					var keepCount = keep.Count();
 					if (keepCount < _connectionString.MinPoolSize)
 						keep = available.Except(keep).Take(_connectionString.MinPoolSize - keepCount).ToArray();
@@ -154,13 +154,19 @@ namespace FirebirdSql.Data.FirebirdClient
 				}
 			}
 
-
 			static FbConnectionInternal CreateNewConnection(FbConnectionString connectionString, FbConnection owner)
 			{
 				var result = new FbConnectionInternal(connectionString);
 				result.SetOwningConnection(owner);
 				result.Connect();
 				return result;
+			}
+
+			static bool IsAlive(long connectionLifeTime, DateTimeOffset created, DateTimeOffset now)
+			{
+				if (connectionLifeTime == 0)
+					return true;
+				return created.AddSeconds(connectionLifeTime) > now;
 			}
 
 			void CleanConnectionsImpl()
@@ -203,33 +209,33 @@ namespace FirebirdSql.Data.FirebirdClient
 			_cleanupTimer = new Timer(CleanupCallback, null, TimeSpan.FromSeconds(2), TimeoutHelper.InfiniteTimeSpan);
 		}
 
-		public FbConnectionInternal Get(FbConnectionString connectionString, FbConnection owner)
+		internal FbConnectionInternal Get(FbConnectionString connectionString, FbConnection owner)
 		{
 			CheckDisposed();
 
 			return _pools.GetOrAdd(connectionString.NormalizedConnectionString, _ => new Pool(connectionString)).GetConnection(owner);
 		}
 
-		public void Release(FbConnectionInternal connection)
+		internal void Release(FbConnectionInternal connection)
 		{
 			CheckDisposed();
 
 			_pools.GetOrAdd(connection.Options.NormalizedConnectionString, _ => new Pool(connection.Options)).ReleaseConnection(connection);
 		}
 
-		public void ClearAllPools()
+		internal void ClearAllPools()
 		{
 			CheckDisposed();
 
 			_pools.Values.AsParallel().ForAll(p => p.ClearPool());
 		}
 
-		public void ClearPool(string connectionString)
+		internal void ClearPool(FbConnectionString connectionString)
 		{
 			CheckDisposed();
 
 			var pool = default(Pool);
-			if (_pools.TryGetValue(connectionString, out pool))
+			if (_pools.TryGetValue(connectionString.NormalizedConnectionString, out pool))
 			{
 				pool.ClearPool();
 			}

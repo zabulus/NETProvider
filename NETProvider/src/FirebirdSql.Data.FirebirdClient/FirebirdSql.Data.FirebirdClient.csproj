@@ -136,8 +136,11 @@
 		<Compile Include="Client\Managed\Version11\SSPIHelper.cs" />
 		<Compile Include="Client\Managed\Version12\GdsDatabase.cs" />
 		<Compile Include="Client\Managed\Version12\GdsStatement.cs" />
+		<Compile Include="Common\CultureAwareEqualityComparer.cs" />
 		<Compile Include="Common\Extensions.cs" />
+		<Compile Include="Common\IscErrorMessages.cs" />
 		<Compile Include="Common\PageSizeHelper.cs" />
+		<Compile Include="Common\SqlStateMapping.cs" />
 		<Compile Include="Common\TimeoutHelper.cs" />
 		<Compile Include="Common\TraceHelper.cs" />
 		<Compile Include="Entity\DmlSqlGenerator.cs" />
@@ -326,6 +329,8 @@
 		<Compile Include="Services\FbDatabasesInfo.cs" />
 		<Compile Include="Services\FbDatabaseTraceConfiguration.cs" />
 		<Compile Include="Services\FbDatabaseTraceEvents.cs" />
+		<Compile Include="Services\FbShutdownMode.cs" />
+		<Compile Include="Services\FbShutdownOnlineMode.cs" />
 		<Compile Include="Services\FbStreamingBackup.cs" />
 		<Compile Include="Services\FbStreamingRestore.cs" />
 		<Compile Include="Services\FbLog.cs" />
@@ -341,7 +346,7 @@
 		<Compile Include="Services\FbServiceState.cs" />
 		<Compile Include="Services\FbServiceTraceConfiguration.cs" />
 		<Compile Include="Services\FbServiceTraceEvents.cs" />
-		<Compile Include="Services\FbShutdownMode.cs" />
+		<Compile Include="Services\FbShutdownType.cs" />
 		<Compile Include="Services\FbStatistical.cs" />
 		<Compile Include="Services\FbStatisticalFlags.cs" />
 		<Compile Include="Services\FbTrace.cs" />
@@ -375,12 +380,6 @@
 	</ItemGroup>
 	<ItemGroup>
 		<EmbeddedResource Include="Entity\ProviderManifest.xml" />
-		<EmbeddedResource Include="Resources\isc_error_msg.resx">
-			<SubType>Designer</SubType>
-		</EmbeddedResource>
-		<EmbeddedResource Include="Resources\sqlstate_mapping.resx">
-			<SubType>Designer</SubType>
-		</EmbeddedResource>
 	</ItemGroup>
 	<Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 	<PropertyGroup>

@@ -48,8 +48,12 @@ namespace FirebirdSql.Data.Services
 		public Stream InputStream { get; set; }
 		public bool Verbose { get; set; }
 		public int? PageBuffers { get; set; }
+		public bool ReadOnly { get; set; }
 		public FbRestoreFlags Options { get; set; }
 
+		public FbStreamingRestore(string connectionString = null)
+			: base(connectionString)
+		{ }
 
 		public void Execute()
 		{
@@ -67,6 +71,7 @@ namespace FirebirdSql.Data.Services
 					StartSpb.Append(IscCodes.isc_spb_res_buffers, (int)PageBuffers);
 				if (pageSize.HasValue)
 					StartSpb.Append(IscCodes.isc_spb_res_page_size, (int)pageSize);
+				this.StartSpb.Append(IscCodes.isc_spb_res_access_mode, (byte)(this.ReadOnly ? IscCodes.isc_spb_res_am_readonly : IscCodes.isc_spb_res_am_readwrite));
 				StartSpb.Append(IscCodes.isc_spb_options, (int)Options);
 
 				Open();
@@ -90,25 +95,31 @@ namespace FirebirdSql.Data.Services
 			var items = Verbose
 				? new byte[] { IscCodes.isc_info_svc_stdin, IscCodes.isc_info_svc_line }
 				: new byte[] { IscCodes.isc_info_svc_stdin };
+			var readAheadBuffer = new List<byte>((32 * 1024) + 1);
+			ReadAheadBuffering(readAheadBuffer, InputStream, 0);
 			var response = Query(items);
 			var length = GetLength(response);
-			while (InputStream.Position < InputStream.Length)
+			while (true)
 			{
 				if (length > 0)
 				{
-					var buffer = new byte[length];
-					var read = InputStream.Read(buffer, 0, length);
-					Array.Resize(ref buffer, read);
+					var data = ReadAheadBuffering(readAheadBuffer, InputStream, length);
 					var spb = new ServiceParameterBuffer();
-					spb.Append(IscCodes.isc_info_svc_line, buffer);
+					spb.Append(IscCodes.isc_info_svc_line, data);
 					QuerySpb = spb;
 				}
 				response = Query(items);
 				QuerySpb = null;
 				length = GetLength(response);
-				ProcessMessages(response);
+				var messages = ProcessMessages(response);
+				if (!readAheadBuffer.Any() && !messages)
+				{
+					break;
+				}
 			}
-			while (ProcessMessages(Query(items))) ;
+			while (Query(new byte[] { IscCodes.isc_info_svc_line }).Count != 0)
+			{ }
+
 		}
 
 		bool ProcessMessages(ArrayList items)
@@ -120,19 +131,42 @@ namespace FirebirdSql.Data.Services
 			return true;
 		}
 
-		int GetLength(ArrayList items)
+		static int GetLength(ArrayList items)
 		{
 			const int maxLength = (32 * 1024) - 4;
 			return Math.Min(items[0] is int ? (int)items[0] : 0, maxLength);
 		}
 
-		string GetMessage(ArrayList items)
+		static string GetMessage(ArrayList items)
 		{
 			if (items[0] is string)
 				return (string)items[0];
 			if (items.Count > 1)
 				return (string)items[1];
 			return null;
+		}
+
+		static byte[] ReadAheadBuffering(List<byte> readAheadBuffer, Stream stream, int length)
+		{
+			var giveLast = false;
+			if (readAheadBuffer.Count < readAheadBuffer.Capacity)
+			{
+				var buffer = new byte[readAheadBuffer.Capacity - readAheadBuffer.Count];
+				var read = stream.Read(buffer, 0, buffer.Length);
+				if (read != 0)
+				{
+					Array.Resize(ref buffer, read);
+					readAheadBuffer.AddRange(buffer);
+				}
+				else
+				{
+					giveLast = true;
+				}
+			}
+			var result = new byte[Math.Min(length, readAheadBuffer.Count - (giveLast ? 0 : 1))];
+			readAheadBuffer.CopyTo(0, result, 0, result.Length);
+			readAheadBuffer.RemoveRange(0, result.Length);
+			return result;
 		}
 	}
 }
