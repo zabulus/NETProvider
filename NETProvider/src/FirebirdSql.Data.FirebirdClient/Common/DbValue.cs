@@ -20,6 +20,7 @@
  */
 
 using System;
+using System.Linq;
 using System.Globalization;
 
 namespace FirebirdSql.Data.Common
@@ -144,6 +145,11 @@ namespace FirebirdSql.Data.Common
 			{
 				return new Guid((byte[])this.value);
 			}
+			else if (this.Field.Charset.IsOctetsCharset && this.Value is string)
+			{
+				string s = (string)this.Value;
+				return new Guid(s.ToCharArray().Select(x => (byte)x).ToArray());
+			}
 
 			throw new InvalidOperationException("Incorrect Guid value");
 		}
@@ -215,9 +221,13 @@ namespace FirebirdSql.Data.Common
 			switch (this.Field.DbDataType)
 			{
 				case DbDataType.Char:
-					if (this.Field.Charset.IsOctetsCharset)
+					if (this.Field.Charset.IsOctetsCharset && this.value is byte[])
 					{
 						return (byte[])this.value;
+					}
+					else if (this.Field.Charset.IsOctetsCharset && this.value is Guid)
+					{
+						return ((Guid)this.value).ToByteArray();
 					}
 					else
 					{

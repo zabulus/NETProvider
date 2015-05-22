@@ -18,6 +18,7 @@
 
 using System;
 using System.Collections;
+using System.Diagnostics;
 using System.Text;
 
 using FirebirdSql.Data.Common;
@@ -246,9 +247,16 @@ namespace FirebirdSql.Data.Client.Native
 
 		public override void Release()
 		{
-			XsqldaMarshaler.Instance.CleanUpNativeData(ref this.fetchSqlDa);
+			try
+			{
+				XsqldaMarshaler.Instance.CleanUpNativeData(ref this.fetchSqlDa);
 
-			base.Release();
+				base.Release();
+			}
+			catch (Exception ex)
+			{
+				TraceHelper.Trace(TraceEventType.Error, ex.Message);
+			}
 		}
 
 		public override void Close()

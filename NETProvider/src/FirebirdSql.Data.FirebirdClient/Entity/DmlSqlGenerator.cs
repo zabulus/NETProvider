@@ -259,7 +259,27 @@ namespace FirebirdSql.Data.EntityFramework6.SqlGen
 					EdmMember member = translator.MemberValues.First(m => m.Value.Contains(param)).Key;
 					startBlock.Append(SqlGenerator.GetSqlPrimitiveType(member.TypeUsage));
 					if (param.FbDbType == FbDbType.VarChar || param.FbDbType == FbDbType.Char)
+					{
+#if EF_6
+						EdmProperty prop = member as EdmProperty;
+						if (prop != null
+								&& prop.IsFixedLength.HasValue
+								&& prop.IsFixedLength.Value
+								&& prop.IsUnicode.HasValue
+								&& !prop.IsUnicode.Value
+								&& prop.MaxLength.HasValue
+								&& prop.MaxLength.Value == 16)
+						{
+							startBlock.Append(" CHARACTER SET OCTETS");
+						}
+						else
+						{
+							startBlock.Append(" CHARACTER SET UTF8");
+						}
+#else
 						startBlock.Append(" CHARACTER SET UTF8");
+#endif
+					}
 					startBlock.Append(" = ");
 					startBlock.Append(param.ParameterName);
 

@@ -510,13 +510,6 @@ namespace FirebirdSql.Data.Common
 
 		private DbDataType GetDbDataType()
 		{
-			// Special case for Guid handling
-			if (this.SqlType == IscCodes.SQL_TEXT && this.Length == 16 &&
-				(this.Charset != null && this.Charset.Name.Equals("OCTETS", StringComparison.InvariantCultureIgnoreCase)))
-			{
-				return DbDataType.Guid;
-			}
-
 			switch (this.SqlType)
 			{
 				case IscCodes.SQL_TEXT:
