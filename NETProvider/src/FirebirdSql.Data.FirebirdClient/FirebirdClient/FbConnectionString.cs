@@ -290,7 +290,7 @@ namespace FirebirdSql.Data.FirebirdClient
 
 		public void Load(string connectionString)
 		{
-			const string KeyPairsRegex = "(([\\w\\s\\d]*)\\s*?=\\s*?\"([^\"]*)\"|([\\w\\s\\d]*)\\s*?=\\s*?'([^']*)'|([\\w\\s\\d]*)\\s*?=\\s*?([^\"'][^;]*))";
+			const string KeyPairsRegex = "(([\\w\\s\\d]*)\\s*?=\\s*?\"([^\"]*)\"|([\\w\\s\\d]*)\\s*?=\\s*?'([^']*)'|([\\w\\s\\d]*)\\s*?=\\s*?([^\"';][^;]*))";
 
 			this.SetDefaultOptions();
 
@@ -419,7 +419,7 @@ namespace FirebirdSql.Data.FirebirdClient
 			this.options.Add("user id", DefaultUserId);
 			this.options.Add("password", DefaultPassword);
 			this.options.Add("role name", DefaultRoleName);
-			this.options.Add("catalog", DefaultCatalog);
+			this.options.Add("initial catalog", DefaultCatalog);
 			this.options.Add("character set", DefaultCharacterSet);
 			this.options.Add("dialect", DefaultDialect);
 			this.options.Add("packet size", DefaultPacketSize);
