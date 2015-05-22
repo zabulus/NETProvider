@@ -86,29 +86,29 @@
 	</PropertyGroup>
 	<ItemGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
 		<Reference Include="System.Data.Entity" />
-		<Reference Include="EntityFramework">
-			<HintPath>..\..\lib\EF5\net45\EntityFramework.dll</HintPath>
+		<Reference Include="EntityFramework, Version=5.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
+			<HintPath>..\..\lib\EntityFramework.5.0.0\lib\net45\EntityFramework.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 	</ItemGroup>
 	<ItemGroup Condition="'$(Configuration)|$(Platform)' == 'Release_40|AnyCPU'">
 		<Reference Include="System.Data.Entity" />
-		<Reference Include="EntityFramework">
-			<HintPath>..\..\lib\EF5\net40\EntityFramework.dll</HintPath>
+		<Reference Include="EntityFramework, Version=5.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
+			<HintPath>..\..\lib\EntityFramework.5.0.0\lib\net40\EntityFramework.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 	</ItemGroup>
 	<ItemGroup Condition="'$(Configuration)|$(Platform)' == 'Release_45|AnyCPU'">
 		<Reference Include="System.Data.Entity" />
-		<Reference Include="EntityFramework">
-			<HintPath>..\..\lib\EF5\net45\EntityFramework.dll</HintPath>
+		<Reference Include="EntityFramework, Version=5.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
+			<HintPath>..\..\lib\EntityFramework.5.0.0\lib\net45\EntityFramework.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 	</ItemGroup>
 	<ItemGroup Condition="'$(Configuration)|$(Platform)' == 'Release_Mono_w_Linux|AnyCPU'">
 		<Reference Include="System.Data.Entity" />
-		<Reference Include="EntityFramework">
-			<HintPath>..\..\lib\EF5\net40\EntityFramework.dll</HintPath>
+		<Reference Include="EntityFramework, Version=5.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
+			<HintPath>..\..\lib\EntityFramework.5.0.0\lib\net40\EntityFramework.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 	</ItemGroup>
@@ -372,6 +372,8 @@
 		<EmbeddedResource Include="Entity\StoreSchemaMapping.msl" />
 		<EmbeddedResource Include="Entity\StoreSchemaDefinitionVersion3.ssdl" />
 		<EmbeddedResource Include="Entity\StoreSchemaMappingVersion3.msl" />
+		<None Include="App.config" />
+		<None Include="packages.config" />
 		<None Include="Properties\FirebirdSql.Data.FirebirdClient.snk" />
 	</ItemGroup>
 	<ItemGroup>
