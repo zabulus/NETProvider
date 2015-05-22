@@ -72,9 +72,7 @@ namespace FirebirdSql.Data.UnitTests
 
 		string GetBackupRestoreFullPath()
 		{
-			var startLocation = Environment.GetEnvironmentVariable("HOMEDRIVE") + @"\";
-			var backupRestoreFile = SearchFiles(startLocation, ConfigurationManager.AppSettings["BackupRestoreFile"]).SingleOrDefault();
-			return backupRestoreFile;
+			return Environment.ExpandEnvironmentVariables(ConfigurationManager.AppSettings["BackupRestoreFile"]);
 		}
 
 		#endregion
@@ -88,7 +86,7 @@ namespace FirebirdSql.Data.UnitTests
 
 			backupSvc.ConnectionString = BuildServicesConnectionString();
 			backupSvc.Options = FbBackupFlags.IgnoreLimbo;
-			backupSvc.BackupFiles.Add(new FbBackupFile(ConfigurationManager.AppSettings["BackupRestoreFile"], 2048));
+			backupSvc.BackupFiles.Add(new FbBackupFile(GetBackupRestoreFullPath(), 2048));
 			backupSvc.Verbose = true;
 
 			backupSvc.ServiceOutput += new ServiceOutputEventHandler(ServiceOutput);
@@ -141,7 +139,7 @@ namespace FirebirdSql.Data.UnitTests
 			restoreSvc.Options = FbRestoreFlags.Create | FbRestoreFlags.Replace;
 			restoreSvc.PageSize = 4096;
 			restoreSvc.Verbose = true;
-			restoreSvc.BackupFiles.Add(new FbBackupFile(ConfigurationManager.AppSettings["BackupRestoreFile"], 2048));
+			restoreSvc.BackupFiles.Add(new FbBackupFile(GetBackupRestoreFullPath(), 2048));
 
 			restoreSvc.ServiceOutput += new ServiceOutputEventHandler(ServiceOutput);
 
@@ -271,58 +269,111 @@ namespace FirebirdSql.Data.UnitTests
 		[Test]
 		public void AddUserTest()
 		{
-			FbSecurity securitySvc = new FbSecurity();
+			try
+			{
+				FbSecurity securitySvc = new FbSecurity();
 
-			securitySvc.ConnectionString = BuildServicesConnectionString(false);
+				securitySvc.ConnectionString = BuildServicesConnectionString(false);
 
-			FbUserData user = new FbUserData();
+				FbUserData user = new FbUserData();
 
-			user.UserName = "new_user";
-			user.UserPassword = "1";
+				user.UserName = "new_user";
+				user.UserPassword = "1";
 
-			securitySvc.AddUser(user);
+				securitySvc.AddUser(user);
+			}
+			catch (FbException ex)
+			{
+				if (ex.ErrorCode == 335544563)
+				{
+				}
+				else
+				{
+					throw;
+				}
+			}
 		}
 
 		[Test]
 		public void DeleteUser()
 		{
-			FbSecurity securitySvc = new FbSecurity();
+			try
+			{
+				FbSecurity securitySvc = new FbSecurity();
 
-			securitySvc.ConnectionString = BuildServicesConnectionString(false);
+				securitySvc.ConnectionString = BuildServicesConnectionString(false);
 
-			FbUserData user = new FbUserData();
+				FbUserData user = new FbUserData();
 
-			user.UserName = "new_user";
+				user.UserName = "new_user";
 
-			securitySvc.DeleteUser(user);
+				securitySvc.DeleteUser(user);
+			}
+			catch (FbException ex)
+			{
+				if (ex.ErrorCode == 335544563)
+				{
+				}
+				else
+				{
+					throw;
+				}
+			}
 		}
 
 		[Test]
 		public void DisplayUser()
 		{
-			FbSecurity securitySvc = new FbSecurity();
+			try
+			{
+				FbSecurity securitySvc = new FbSecurity();
 
-			securitySvc.ConnectionString = BuildServicesConnectionString(false);
+				securitySvc.ConnectionString = BuildServicesConnectionString(false);
 
-			FbUserData user = securitySvc.DisplayUser("SYSDBA");
+				FbUserData user = securitySvc.DisplayUser("SYSDBA");
 
-			Console.WriteLine("User name {0}", user.UserName);
+				Console.WriteLine("User name {0}", user.UserName);
+			}
+			catch (FbException ex)
+			{
+				if (ex.ErrorCode == 335544563)
+				{
+				}
+				else
+				{
+					throw;
+				}
+			}
 		}
 
 		[Test]
 		public void DisplayUsers()
 		{
-			FbSecurity securitySvc = new FbSecurity();
-
-			securitySvc.ConnectionString = BuildServicesConnectionString(false);
-
-			FbUserData[] users = securitySvc.DisplayUsers();
-
-			Console.WriteLine("User List");
-
-			for (int i = 0; i < users.Length; i++)
+			try
 			{
-				Console.WriteLine("User {0} name {1}", i, users[i].UserName);
+				GetServerVersion();
+				FbSecurity securitySvc = new FbSecurity();
+
+				securitySvc.ConnectionString = BuildServicesConnectionString(false);
+
+				FbUserData[] users = securitySvc.DisplayUsers();
+
+				Console.WriteLine("User List");
+
+				for (int i = 0; i < users.Length; i++)
+				{
+					Console.WriteLine("User {0} name {1}", i, users[i].UserName);
+				}
+			}
+			catch (FbException ex)
+			{
+				if (ex.ErrorCode == 335544563)
+				{
+				}
+				else
+				{
+					throw;
+				}
 			}
 		}
 
@@ -359,7 +410,7 @@ namespace FirebirdSql.Data.UnitTests
 
 					nbak.ConnectionString = BuildServicesConnectionString();
 					nbak.Level = l;
-					nbak.BackupFile = ConfigurationManager.AppSettings["BackupRestoreFile"] + l.ToString();
+					nbak.BackupFile = GetBackupRestoreFullPath() + l.ToString();
 					nbak.DirectIO = true;
 
 					nbak.Options = FbNBackupFlags.NoDatabaseTriggers;
@@ -386,7 +437,7 @@ namespace FirebirdSql.Data.UnitTests
 			var nrest = new FbNRestore();
 
 			nrest.ConnectionString = BuildServicesConnectionString();
-			nrest.BackupFiles = Enumerable.Range(0, 2).Select(l => ConfigurationManager.AppSettings["BackupRestoreFile"] + l.ToString());
+			nrest.BackupFiles = Enumerable.Range(0, 2).Select(l => GetBackupRestoreFullPath() + l.ToString());
 			nrest.DirectIO = true;
 
 			nrest.ServiceOutput += ServiceOutput;

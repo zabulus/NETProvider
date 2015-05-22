@@ -189,7 +189,7 @@ namespace FirebirdSql.Data.UnitTests
 			using (var c = new ProperVarcharLengthForConstantContext(Connection))
 			{
 				var q = c.Bars.Where(x => x.BarString == "TEST");
-				StringAssert.Contains("CAST(_UTF8'TEST' AS VARCHAR(8191))", q.ToString());
+				StringAssert.Contains("CAST(_UTF8'TEST' AS VARCHAR(4))", q.ToString());
 			}
 		}
 
