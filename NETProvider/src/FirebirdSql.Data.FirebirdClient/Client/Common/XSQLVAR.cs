@@ -24,7 +24,7 @@ using System.Runtime.InteropServices;
 namespace FirebirdSql.Data.Client.Common
 {
 	[StructLayout(LayoutKind.Sequential)]
-	internal struct XSQLVAR
+	internal class XSQLVAR
 	{
 		public short sqltype;
 		public short sqlscale;

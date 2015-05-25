@@ -169,6 +169,48 @@ namespace FirebirdSql.Data.Client.Common
 			return ptr;
 		}
 
+		public static Descriptor MarshalNativeToManaged(Charset charset, IntPtr pNativeData)
+		{
+			return MarshalNativeToManaged(charset, pNativeData, false);
+		}
+
+		static int sqlTypeOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqltype").AsInt();
+		static int sqlscaleOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqlscale").AsInt();
+		static int sqlsubtypeOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqlsubtype").AsInt();
+		static int sqllenOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqllen").AsInt();
+		static int sqldataOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqldata").AsInt();
+		static int sqlindOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqlind").AsInt();
+		static int sqlname_lengthOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqlname_length").AsInt();
+		static int sqlnameOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqlname").AsInt();
+		static int relname_lengthOffset = Marshal.OffsetOf(typeof(XSQLVAR), "relname_length").AsInt();
+		static int relnameOffset = Marshal.OffsetOf(typeof(XSQLVAR), "relname").AsInt();
+		static int ownername_lengthOffset = Marshal.OffsetOf(typeof(XSQLVAR), "ownername_length").AsInt();
+		static int ownernameOffset = Marshal.OffsetOf(typeof(XSQLVAR), "ownername").AsInt();
+		static int aliasname_lengthOffset = Marshal.OffsetOf(typeof(XSQLVAR), "aliasname_length").AsInt();
+		static int aliasnameOffset = Marshal.OffsetOf(typeof(XSQLVAR), "aliasname").AsInt();
+
+
+		static void MarshalVAR(IntPtr ptr, XSQLVAR var)
+		{
+			unsafe
+			{
+				var.sqltype = *(short*)(ptr + sqlTypeOffset);
+				var.sqlscale = *(short*)(ptr + sqlscaleOffset);
+				var.sqlsubtype = *(short*)(ptr + sqlsubtypeOffset);
+				var.sqllen = *(short*)(ptr + sqllenOffset);
+				var.sqldata = *(IntPtr*)(ptr + sqldataOffset);
+				var.sqlind = *(IntPtr*)(ptr + sqlindOffset);
+				var.sqlname_length = *(short*)(ptr + sqlname_lengthOffset);
+				Marshal.Copy((ptr + sqlnameOffset), var.sqlname, 0, 32);
+				var.relname_length = *(short*)(ptr + relname_lengthOffset);
+				Marshal.Copy((ptr + relnameOffset), var.relname, 0, 32);
+				var.ownername_length = *(short*)(ptr + ownername_lengthOffset);
+				Marshal.Copy((ptr + ownernameOffset), var.ownername, 0, 32);
+				var.aliasname_length = *(short*)(ptr + aliasname_lengthOffset);
+				Marshal.Copy((ptr + aliasnameOffset), var.aliasname, 0, 32);
+			}
+		}
+
 		public Descriptor MarshalNativeToManaged(Charset charset, IntPtr pNativeData)
 		{
 			return this.MarshalNativeToManaged(charset, pNativeData, false);
@@ -186,27 +228,27 @@ namespace FirebirdSql.Data.Client.Common
 			descriptor.ActualCount  = xsqlda.sqld;
 
 			// Obtain XSQLVAR members information
-			XSQLVAR[] xsqlvar = new XSQLVAR[xsqlda.sqln];
 
-			for (int i = 0; i < xsqlvar.Length; i++)
+			XSQLVAR xsqlvar = new XSQLVAR();
+			for (var i = 0; i < xsqlda.sqln; i++)
 			{
 				IntPtr ptr = this.GetIntPtr(pNativeData, this.ComputeLength(i));
-				xsqlvar[i] = (XSQLVAR)Marshal.PtrToStructure(ptr, typeof(XSQLVAR));
+				MarshalVAR(ptr, xsqlvar);
 
 				// Map XSQLVAR information to Descriptor
-				descriptor[i].DataType      = xsqlvar[i].sqltype;
-				descriptor[i].NumericScale  = xsqlvar[i].sqlscale;
-				descriptor[i].SubType       = xsqlvar[i].sqlsubtype;
-				descriptor[i].Length        = xsqlvar[i].sqllen;
+				descriptor[i].DataType = xsqlvar.sqltype;
+				descriptor[i].NumericScale = xsqlvar.sqlscale;
+				descriptor[i].SubType = xsqlvar.sqlsubtype;
+				descriptor[i].Length = xsqlvar.sqllen;
 
 				// Decode sqlind value
-				if (xsqlvar[i].sqlind == IntPtr.Zero)
+				if (xsqlvar.sqlind == IntPtr.Zero)
 				{
 					descriptor[i].NullFlag = 0;
 				}
 				else
 				{
-					descriptor[i].NullFlag = Marshal.ReadInt16(xsqlvar[i].sqlind);
+					descriptor[i].NullFlag = Marshal.ReadInt16(xsqlvar.sqlind);
 				}
 
 				// Set value
@@ -214,14 +256,14 @@ namespace FirebirdSql.Data.Client.Common
 				{
 					if (descriptor[i].NullFlag != -1)
 					{
-						descriptor[i].SetValue(this.GetBytes(xsqlvar[i]));
+						descriptor[i].SetValue(this.GetBytes(xsqlvar));
 					}
 				}
 
-				descriptor[i].Name      = this.GetString(charset, xsqlvar[i].sqlname);
-				descriptor[i].Relation  = this.GetString(charset, xsqlvar[i].relname);
-				descriptor[i].Owner     = this.GetString(charset, xsqlvar[i].ownername);
-				descriptor[i].Alias     = this.GetString(charset, xsqlvar[i].aliasname);
+				descriptor[i].Name = GetString(charset, xsqlvar.sqlname, xsqlvar.sqlname_length);
+				descriptor[i].Relation = GetString(charset, xsqlvar.relname, xsqlvar.relname_length);
+				descriptor[i].Owner = GetString(charset, xsqlvar.ownername, xsqlvar.ownername_length);
+				descriptor[i].Alias = GetString(charset, xsqlvar.aliasname, xsqlvar.aliasname_length);
 			}
 
 			return descriptor;
@@ -236,9 +278,12 @@ namespace FirebirdSql.Data.Client.Common
 			return new IntPtr(ptr.ToInt64() + offset);
 		}
 
+		static int sizeofXSQLDA = Marshal.SizeOf(typeof(XSQLDA));
+		static int sizeofXSQLVAR = Marshal.SizeOf(typeof(XSQLVAR));
+
 		private int ComputeLength(int n)
 		{
-			int length = (Marshal.SizeOf(typeof(XSQLDA)) + n * Marshal.SizeOf(typeof(XSQLVAR)));
+			var length = (sizeofXSQLDA + n * sizeofXSQLVAR);
 			if (IntPtr.Size == 8)
 				length += 4;
 			return length;
@@ -301,6 +346,11 @@ namespace FirebirdSql.Data.Client.Common
 			string value = charset.GetString(buffer);
 
 			return value.TrimEnd('\0', ' ');
+		}
+
+		private static string GetString(Charset charset, byte[] buffer, short bufferLength)
+		{
+			return charset.GetString(buffer, 0, bufferLength);
 		}
 
 		#endregion
