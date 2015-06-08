@@ -168,12 +168,7 @@ namespace FirebirdSql.Data.Client.Common
 
 			return ptr;
 		}
-
-		public static Descriptor MarshalNativeToManaged(Charset charset, IntPtr pNativeData)
-		{
-			return MarshalNativeToManaged(charset, pNativeData, false);
-		}
-
+		
 		static int sqlTypeOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqltype").AsInt();
 		static int sqlscaleOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqlscale").AsInt();
 		static int sqlsubtypeOffset = Marshal.OffsetOf(typeof(XSQLVAR), "sqlsubtype").AsInt();

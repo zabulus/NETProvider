@@ -34,15 +34,15 @@ namespace FirebirdSql.Data.Client.Common
 		public IntPtr sqlind;
 		public short sqlname_length;
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
-		public byte[] sqlname;
+		public byte[] sqlname = new byte[32];
 		public short relname_length;
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
-		public byte[] relname;
+		public byte[] relname = new byte[32];
 		public short ownername_length;
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
-		public byte[] ownername;
+		public byte[] ownername = new byte[32];
 		public short aliasname_length;
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
-		public byte[] aliasname;
+		public byte[] aliasname = new byte[32];
 	}
 }

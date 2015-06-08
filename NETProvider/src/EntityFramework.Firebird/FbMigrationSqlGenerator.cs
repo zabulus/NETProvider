@@ -24,7 +24,6 @@ using System.Data.Common;
 using System.Data.Entity;
 using System.Data.Entity.Core.Common;
 using System.Data.Entity.Core.Common.CommandTrees;
-using System.Data.Entity.Core.Metadata.Edm;
 using System.Data.Entity.Infrastructure.DependencyResolution;
 using System.Data.Entity.Migrations.Model;
 using System.Data.Entity.Migrations.Sql;
@@ -32,37 +31,39 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using FirebirdSql.Data.EntityFramework6;
 using FirebirdSql.Data.EntityFramework6.SqlGen;
 
 namespace FirebirdSql.Data.EntityFramework6
 {
-	public class FbMigrationSqlGenerator : MigrationSqlGenerator
+	internal class FbMigrationSqlGenerator : MigrationSqlGenerator
 	{
-		readonly IFbMigrationSqlGeneratorBehavior _behavior;
+		private readonly IFbMigrationSqlGeneratorBehavior behavior = new CustomFbMigrationSqlGeneratorBehavior();
+		private string migrationsHistoryTableName;
 
-		string _migrationsHistoryTableName;
-
-		public FbMigrationSqlGenerator(IFbMigrationSqlGeneratorBehavior behavior = null)
-		{
-			_behavior = behavior ?? new DefaultFbMigrationSqlGeneratorBehavior();
-		}
-
-		public override IEnumerable<MigrationStatement> Generate(IEnumerable<MigrationOperation> migrationOperations, string providerManifestToken)
+		public override IEnumerable<MigrationStatement> Generate(IEnumerable<MigrationOperation> migrationOperations,
+				string providerManifestToken)
 		{
 			InitializeProviderServices(providerManifestToken);
 
-			var lastOperation = migrationOperations.Last();
+			var migrationOperationsList = migrationOperations as IList<MigrationOperation> ??
+																		migrationOperations.ToList();
+			var lastOperation = migrationOperationsList.Last();
 			var updateDatabaseOperation = lastOperation as UpdateDatabaseOperation;
 			var historyOperation = updateDatabaseOperation != null
-				? updateDatabaseOperation.Migrations.First().Operations.OfType<HistoryOperation>().First()
-				: (HistoryOperation)lastOperation;
+					? updateDatabaseOperation.Migrations.First().Operations.OfType<HistoryOperation>().First()
+					: (HistoryOperation)lastOperation;
 			var modify = historyOperation.CommandTrees.First();
-			_migrationsHistoryTableName = (modify.Target.Expression as DbScanExpression).Target.Table;
+			var dbScanExpression = modify.Target.Expression as DbScanExpression;
+			if (dbScanExpression != null)
+			{
+				migrationsHistoryTableName = dbScanExpression.Target.Table;
+			}
 
-			return GenerateStatements(migrationOperations).ToArray();
+			return GenerateStatements(migrationOperationsList).ToArray();
 		}
 
-		void InitializeProviderServices(string providerManifestToken)
+		private void InitializeProviderServices(string providerManifestToken)
 		{
 			using (var connection = CreateConnection())
 			{
@@ -96,18 +97,65 @@ namespace FirebirdSql.Data.EntityFramework6
 				writer.Write(Quote(tableName));
 				writer.Write(" ADD ");
 				var column = operation.Column;
-				var columnData = Generate(column, tableName);
+
+				var builder = new StringBuilder();
+				var additionalCommands = new List<string>();
+
+				var columnType = BuildPropertyType(column);
+				builder.Append(Quote(column.Name));
+				builder.Append(" ");
+				builder.Append(columnType);
+
+				if (column.IsIdentity)
+				{
+					var identity = behavior.CreateIdentityForColumn(column.Name, tableName);
+					additionalCommands.AddRange(identity.Where(x => !string.IsNullOrWhiteSpace(x)));
+				}
+
+				if (column.ClrType == typeof(bool))
+				{
+					const string format = "ALTER TABLE \"{0}\" ADD CHECK (\"{1}\" IN (1,0));";
+					additionalCommands.Add(string.Format(format, tableName, column.Name));
+				}
+
+				var columnData = Tuple.Create(builder.ToString(), additionalCommands.AsEnumerable());
+
 				writer.Write(columnData.Item1);
-				if (column.IsNullable != null
-					&& !column.IsNullable.Value
-					&& column.DefaultValue == null
-					&& string.IsNullOrWhiteSpace(column.DefaultValueSql)
-					&& !column.IsIdentity
-					&& !column.IsTimestamp)
+
+				if (column.DefaultValue != null)
 				{
 					writer.Write(" DEFAULT ");
-					writer.Write(WriteValue((dynamic)column.ClrDefaultValue));
+					writer.Write(WriteValue((dynamic)column.DefaultValue));
 				}
+				else if (!string.IsNullOrWhiteSpace(column.DefaultValueSql))
+				{
+					writer.Write(" DEFAULT ");
+					writer.Write(column.DefaultValueSql);
+				}
+				else if (column.IsNullable != null
+						&& !column.IsNullable.Value
+						&& column.DefaultValue == null
+						&& string.IsNullOrWhiteSpace(column.DefaultValueSql)
+						&& !column.IsIdentity
+						&& !column.IsTimestamp)
+				{
+					writer.Write(" DEFAULT ");
+					if (column.ClrType == typeof(bool))
+					{
+						writer.Write(WriteValue(Convert.ToInt16(column.ClrDefaultValue)));
+					}
+					else
+					{
+						writer.Write(WriteValue((dynamic)column.ClrDefaultValue));
+					}
+				}
+
+				if ((column.IsNullable != null)
+						&& !column.IsNullable.Value)
+				{
+					writer.Write(" NOT NULL");
+				}
+
 				yield return Statement(writer);
 			}
 		}
@@ -185,9 +233,11 @@ namespace FirebirdSql.Data.EntityFramework6
 				writer.Write("END");
 				yield return Statement(writer);
 			}
+
 			// drop identity trigger first, either it will be recreated or it was to drop
-			foreach (var item in _behavior.DropIdentityForColumn(column.Name, tableName))
+			foreach (var item in behavior.DropIdentityForColumn(column.Name, tableName))
 				yield return Statement(item);
+
 
 			using (var writer = SqlWriter())
 			{
@@ -233,14 +283,16 @@ namespace FirebirdSql.Data.EntityFramework6
 					writer.Write(" ALTER COLUMN ");
 					writer.Write(Quote(column.Name));
 					writer.Write(" SET DEFAULT ");
-					writer.Write(column.DefaultValue != null ? WriteValue((dynamic)column.DefaultValue) : column.DefaultValueSql);
+					writer.Write(column.DefaultValue != null
+							? WriteValue((dynamic)column.DefaultValue)
+							: column.DefaultValueSql);
 					yield return Statement(writer);
 				}
 			}
 
 			if (column.IsIdentity)
 			{
-				foreach (var item in _behavior.CreateIdentityForColumn(column.Name, tableName))
+				foreach (var item in behavior.CreateIdentityForColumn(column.Name, tableName))
 					yield return Statement(item);
 			}
 		}
@@ -284,7 +336,8 @@ namespace FirebirdSql.Data.EntityFramework6
 		protected virtual IEnumerable<MigrationStatement> Generate(CreateTableOperation operation)
 		{
 			var tableName = ExtractName(operation.Name);
-			var isMigrationsHistoryTable = tableName.Equals(_migrationsHistoryTableName, StringComparison.InvariantCulture);
+			var isMigrationsHistoryTable = tableName.Equals(migrationsHistoryTableName,
+					StringComparison.InvariantCulture);
 			var columnsData = operation.Columns.Select(x => Generate(x, tableName)).ToArray();
 			using (var writer = SqlWriter())
 			{
@@ -511,7 +564,7 @@ namespace FirebirdSql.Data.EntityFramework6
 			builder.Append(columnType);
 
 			if ((column.IsNullable != null)
-				&& !column.IsNullable.Value)
+					&& !column.IsNullable.Value)
 			{
 				builder.Append(" NOT NULL");
 			}
@@ -528,11 +581,11 @@ namespace FirebirdSql.Data.EntityFramework6
 			}
 			else if (column.IsIdentity)
 			{
-				var identity = _behavior.CreateIdentityForColumn(column.Name, tableName);
+				var identity = behavior.CreateIdentityForColumn(column.Name, tableName);
 				additionalCommands.AddRange(identity.Where(x => !string.IsNullOrWhiteSpace(x)));
 			}
 
-			if (column.ClrType == typeof (bool))
+			if (column.ClrType == typeof(bool))
 			{
 				const string format = "ALTER TABLE \"{0}\" ADD CHECK (\"{1}\" IN (1,0));";
 				additionalCommands.Add(string.Format(format, tableName, column.Name));
@@ -554,10 +607,11 @@ namespace FirebirdSql.Data.EntityFramework6
 
 		#region Helpers
 
-		static MigrationStatement Statement(SqlWriter sqlWriter, bool suppressTransaction = false)
+		private static MigrationStatement Statement(SqlWriter sqlWriter, bool suppressTransaction = false)
 		{
 			return Statement(sqlWriter.ToString(), suppressTransaction);
 		}
+
 		protected static MigrationStatement Statement(string sql, bool suppressTransaction = false)
 		{
 			return new MigrationStatement
@@ -615,7 +669,7 @@ namespace FirebirdSql.Data.EntityFramework6
 			return result;
 		}
 
-		string BuildPropertyType(PropertyModel propertyModel)
+		private string BuildPropertyType(PropertyModel propertyModel)
 		{
 			var storeTypeName = propertyModel.StoreType;
 			var typeUsage = ProviderManifest.GetStoreType(propertyModel.TypeUsage);
@@ -671,7 +725,7 @@ namespace FirebirdSql.Data.EntityFramework6
 			return string.Concat("PK_", p);
 		}
 
-		static void WriteColumns(SqlWriter writer, IEnumerable<string> columns, bool separateLines = false)
+		private static void WriteColumns(SqlWriter writer, IEnumerable<string> columns, bool separateLines = false)
 		{
 			var separator = (string)null;
 			foreach (var column in columns)
@@ -687,12 +741,14 @@ namespace FirebirdSql.Data.EntityFramework6
 			}
 		}
 
-		static DbConnection CreateConnection()
+		private static DbConnection CreateConnection()
 		{
-			return DbConfiguration.DependencyResolver.GetService<DbProviderFactory>(FbProviderServices.ProviderInvariantName).CreateConnection();
+			return
+					DbConfiguration.DependencyResolver.GetService<DbProviderFactory>(
+							FbProviderServices.ProviderInvariantName).CreateConnection();
 		}
 
-		IEnumerable<MigrationStatement> GenerateStatements(IEnumerable<MigrationOperation> operations)
+		private IEnumerable<MigrationStatement> GenerateStatements(IEnumerable<MigrationOperation> operations)
 		{
 			return operations.Select<dynamic, IEnumerable<MigrationStatement>>(x => Generate(x)).SelectMany(x => x);
 		}

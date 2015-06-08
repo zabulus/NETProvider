@@ -5,3 +5,4 @@ obj
 */installer/out/
 DataDesignerExtensibility/installer/in/
 *.nupkg
+/NETProvider/lib/
